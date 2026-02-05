@@ -1,0 +1,10 @@
+github-copilot-sdk
+pystray
+pillow
+sounddevice
+numpy
+openwakeword
+faster-whisper
+pyttsx3
+psutil
+pyyaml

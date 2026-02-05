@@ -1,0 +1,33 @@
+app:
+  name: "Copilot Echo"
+  log_level: "INFO"
+
+voice:
+  # wakeword_engine: "stt" (keyword check) or "openwakeword" (real wake word)
+  wakeword_engine: "stt"
+  wake_word: "hey copilot"
+  audio_device: null
+  audio_device_name: null
+  sample_rate: 16000
+  wake_listen_seconds: 2.5
+  command_listen_seconds: 5.0
+  # openwakeword settings (only used when wakeword_engine is "openwakeword")
+  wakeword_model_paths: []
+  wakeword_threshold: 0.6
+  wakeword_chunk_size: 1280
+  wakeword_holdoff_seconds: 1.0
+  stt_model: "base"
+  stt_device: "cpu"
+  stt_compute_type: "int8"
+
+repo:
+  default_path: null
+  require_confirmation: true
+
+tools:
+  allowlist:
+    - "mcp.azure_devops.work_items"
+    - "fs.read"
+    - "fs.write"
+    - "git.status"
+    - "git.diff"
