@@ -40,6 +40,17 @@ Wake word engines:
 - `stt`: keyword check via short transcription (simple, less strict)
 - `openwakeword`: real wake word engine (recommended). Configure `wakeword_model_paths` if you want to use custom models.
 
+Openwakeword supports selecting a specific model by name. Examples from the default set:
+`alexa`, `hey mycroft`, `hey jarvis`, `hey rhasspy`, `current weather`, `timers`.
+Set `wakeword_models` to a single name to avoid triggering on other phrases.
+
+Custom wake word models:
+1) Train a model with openwakeword's Colab notebook for your phrase (e.g., "hey copilot").
+2) Save the exported model file under `models/` (for example, `models/hey_copilot.tflite`).
+3) Set `wakeword_engine: "openwakeword"` and `wakeword_models: ["models/hey_copilot.tflite"]`.
+
+Guide: see `docs/wakeword_training.md` for training "hey echo".
+
 ## Roadmap
 - Wire wake word and local STT/TTS
 - Implement tray icon and status

@@ -21,10 +21,13 @@ class WakeWordDetector:
         sample_rate: int,
         audio_device: int | None,
         audio_device_name: str | None,
-        model_paths: Iterable[str] | None,
+        inference_framework: str,
+        wakeword_models: Iterable[str] | None,
         threshold: float,
         chunk_size: int,
         holdoff_seconds: float,
+        vad_threshold: float,
+        speex_noise_suppression: bool,
     ) -> None:
         self.engine = engine
         self.phrase = phrase.lower().strip()
@@ -32,20 +35,35 @@ class WakeWordDetector:
         self.listen_seconds = listen_seconds
         self.sample_rate = sample_rate
         self.audio_device = resolve_input_device(audio_device, audio_device_name)
-        self.model_paths = list(model_paths or [])
+        self.inference_framework = inference_framework
+        self.wakeword_models = list(wakeword_models or [])
         self.threshold = threshold
         self.chunk_size = chunk_size
         self.holdoff_seconds = holdoff_seconds
+        self.vad_threshold = vad_threshold
+        self.speex_noise_suppression = speex_noise_suppression
         self._last_trigger = 0.0
         self._model = None
 
         if self.engine == "openwakeword":
+            if self.inference_framework == "onnx":
+                from openwakeword.utils import download_models
+
+                model_names = []
+                for model in self.wakeword_models:
+                    if model and "." not in model:
+                        model_names.append(model.replace(" ", "_"))
+
+                download_models(model_names=model_names)
+
             from openwakeword.model import Model
 
-            if self.model_paths:
-                self._model = Model(wakeword_models=self.model_paths)
-            else:
-                self._model = Model()
+            self._model = Model(
+                wakeword_models=self.wakeword_models,
+                inference_framework=self.inference_framework,
+                vad_threshold=self.vad_threshold,
+                enable_speex_noise_suppression=self.speex_noise_suppression,
+            )
 
     def listen_until_detected(self, stop_event) -> bool:
         if self.engine == "openwakeword":

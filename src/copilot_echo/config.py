@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import List, Optional
 
@@ -22,10 +22,14 @@ class VoiceConfig:
     sample_rate: int = 16000
     wake_listen_seconds: float = 2.5
     command_listen_seconds: float = 5.0
-    wakeword_model_paths: List[str] = None  # type: ignore[assignment]
+    post_tts_cooldown_seconds: float = 0.5
+    wakeword_inference_framework: str = "tflite"
+    wakeword_models: List[str] = field(default_factory=list)
     wakeword_threshold: float = 0.6
     wakeword_chunk_size: int = 1280
     wakeword_holdoff_seconds: float = 1.0
+    wakeword_vad_threshold: float = 0.0
+    wakeword_speex_noise_suppression: bool = False
     stt_model: str = "base"
     stt_device: str = "cpu"
     stt_compute_type: str = "int8"
