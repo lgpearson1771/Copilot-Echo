@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import enum
+import logging
 from typing import Optional
 
+from copilot_echo.agent import Agent
 from copilot_echo.config import Config
 
 
@@ -21,6 +23,20 @@ class Orchestrator:
         self.config = config
         self.state = State.IDLE
         self.last_error: Optional[str] = None
+        self.agent = Agent(config)
+        self.interrupt_requested = False
+
+    def start_agent(self) -> None:
+        """Start the Copilot SDK agent."""
+        try:
+            self.agent.start()
+        except Exception:
+            logging.exception("Failed to start Copilot agent")
+            self.last_error = "Agent failed to start"
+
+    def stop_agent(self) -> None:
+        """Shutdown the Copilot SDK agent."""
+        self.agent.stop()
 
     def pause(self) -> None:
         self.state = State.PAUSED
@@ -28,21 +44,33 @@ class Orchestrator:
     def resume(self) -> None:
         self.state = State.IDLE
 
+    def request_interrupt(self) -> None:
+        """Request interruption of current operation (TTS or processing)."""
+        self.interrupt_requested = True
+        logging.info("Interrupt requested")
+
+    def clear_interrupt(self) -> None:
+        """Clear interrupt flag."""
+        self.interrupt_requested = False
+
     def on_wake_word(self) -> None:
         if self.state != State.PAUSED:
             self.state = State.LISTENING
 
-    def on_transcript(self, text: str) -> None:
+    def send_to_agent(self, text: str) -> str:
+        """Send a user transcript to the Copilot agent and return the reply."""
         self.state = State.PROCESSING
-        # TODO: Parse intent, call MCP via Copilot SDK, read back, request context.
-        self.state = State.AWAITING_CONTEXT
+        try:
+            reply = self.agent.send(text)
+            return reply
+        except Exception as exc:
+            logging.exception("Agent error")
+            self.last_error = str(exc)
+            return "Sorry, I encountered an error."
+        finally:
+            self.state = State.IDLE
 
-    def on_additional_context(self, text: str) -> None:
-        self.state = State.PROCESSING
-        # TODO: Start agent session and prepare plan.
-        self.state = State.AWAITING_CONFIRMATION
-
-    def on_confirm(self, confirmed: bool) -> None:
-        self.state = State.PROCESSING
-        # TODO: Apply changes if confirmed.
-        self.state = State.IDLE if confirmed else State.AWAITING_CONTEXT
+    def cancel_agent(self) -> None:
+        """Cancel any pending agent request."""
+        self.agent.cancel()
+        self.state = State.IDLE

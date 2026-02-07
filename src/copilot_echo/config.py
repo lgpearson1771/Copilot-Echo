@@ -23,6 +23,7 @@ class VoiceConfig:
     wake_listen_seconds: float = 2.5
     command_listen_seconds: float = 5.0
     post_tts_cooldown_seconds: float = 0.5
+    conversation_window_seconds: float = 30.0
     wakeword_inference_framework: str = "tflite"
     wakeword_models: List[str] = field(default_factory=list)
     wakeword_threshold: float = 0.6
