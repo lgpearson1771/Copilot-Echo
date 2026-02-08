@@ -24,7 +24,6 @@ class Orchestrator:
         self.state = State.IDLE
         self.last_error: Optional[str] = None
         self.agent = Agent(config)
-        self.interrupt_requested = False
 
     def start_agent(self) -> None:
         """Start the Copilot SDK agent."""
@@ -43,15 +42,6 @@ class Orchestrator:
 
     def resume(self) -> None:
         self.state = State.IDLE
-
-    def request_interrupt(self) -> None:
-        """Request interruption of current operation (TTS or processing)."""
-        self.interrupt_requested = True
-        logging.info("Interrupt requested")
-
-    def clear_interrupt(self) -> None:
-        """Clear interrupt flag."""
-        self.interrupt_requested = False
 
     def on_wake_word(self) -> None:
         if self.state != State.PAUSED:

@@ -22,6 +22,9 @@ class VoiceConfig:
     sample_rate: int = 16000
     wake_listen_seconds: float = 2.5
     command_listen_seconds: float = 5.0
+    utterance_end_seconds: float = 1.5
+    max_listen_seconds: float = 60.0
+    stt_energy_threshold: float = 0.01
     post_tts_cooldown_seconds: float = 0.5
     conversation_window_seconds: float = 30.0
     wakeword_inference_framework: str = "tflite"

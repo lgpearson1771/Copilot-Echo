@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-import threading
+import re
 import time
 from typing import Callable
 
@@ -69,7 +69,6 @@ class VoiceLoop:
                 continue
 
             self.orchestrator.on_wake_word()
-            self.orchestrator.clear_interrupt()
             logging.info("Wake word detected")
             self._conversation_loop(status_callback, stop_event)
 
@@ -77,31 +76,26 @@ class VoiceLoop:
         self, status_callback: Callable[[str], None], stop_event
     ) -> None:
         """Stay in conversation mode, listening without wake word, until
-        timeout or 'stop listening' command.
-
-        While the agent is processing or TTS is speaking, a background
-        thread monitors for the wake word so the user can interrupt and
-        redirect immediately by saying the wake phrase again.
-        """
+        silence timeout or 'stop listening' command."""
         window = self.config.voice.conversation_window_seconds
         deadline = time.time() + window
         logging.info("Entering conversation mode (%.0fs window)", window)
         status_callback("Conversation")
 
-        while not stop_event.is_set() and time.time() < deadline:
-            text = self.stt.transcribe_once(self.config.voice.command_listen_seconds)
-            normalized = text.lower().strip() if text else ""
+        while not stop_event.is_set():
+            # Use remaining time until deadline as the silence timeout
+            # so the conversation exits only after continuous silence.
+            remaining = deadline - time.time()
+            if remaining <= 0:
+                break
 
-            # Check for interrupt command (spoken during STT recording)
-            if any(phrase in normalized for phrase in ["stop", "cancel", "never mind"]):
-                logging.info("Interrupt command detected")
-                self.orchestrator.request_interrupt()
-                self.tts.stop()
-                self.tts.speak("Okay, stopped.")
-                deadline = time.time() + window
-                if self.config.voice.post_tts_cooldown_seconds > 0:
-                    time.sleep(self.config.voice.post_tts_cooldown_seconds)
-                continue
+            text = self.stt.transcribe_until_silence(
+                silence_timeout=remaining,
+                utterance_end_seconds=self.config.voice.utterance_end_seconds,
+                max_duration=self.config.voice.max_listen_seconds,
+                energy_threshold=self.config.voice.stt_energy_threshold,
+            )
+            normalized = text.lower().strip() if text else ""
 
             if "stop listening" in normalized:
                 logging.info("Stop listening command detected")
@@ -121,81 +115,20 @@ class VoiceLoop:
                 continue
 
             if not text:
-                logging.info("Transcript: <empty>")
-                continue
+                # No speech detected — silence_timeout elapsed inside
+                # transcribe_until_silence, so we exit conversation mode.
+                logging.info("Silence timeout reached")
+                break
 
             logging.info("Transcript: %s", text)
             status_callback("Processing")
-            self.orchestrator.clear_interrupt()
 
-            # ------ Interruptible agent call ------
-            # Monitor for wake word in a background thread so the user
-            # can say the wake phrase to interrupt while the agent thinks.
-            interrupt_event = threading.Event()
-            monitor_stop = threading.Event()
+            reply = self.orchestrator.send_to_agent(text)
 
-            monitor_thread = threading.Thread(
-                target=self.wakeword.monitor_for_interrupt,
-                args=(monitor_stop, interrupt_event),
-                daemon=True,
-            )
-            monitor_thread.start()
-
-            reply_box: list[str | None] = [None]
-
-            def _agent_worker() -> None:
-                reply_box[0] = self.orchestrator.send_to_agent(text)
-
-            agent_thread = threading.Thread(target=_agent_worker, daemon=True)
-            agent_thread.start()
-
-            # Wait for agent to finish OR wake word interrupt
-            while agent_thread.is_alive():
-                if interrupt_event.is_set():
-                    logging.info("User interrupted during agent processing")
-                    self.orchestrator.cancel_agent()
-                    break
-                agent_thread.join(timeout=0.1)
-
-            monitor_stop.set()
-            monitor_thread.join(timeout=2)
-
-            if interrupt_event.is_set():
-                self.tts.speak("Go ahead.")
-                if self.config.voice.post_tts_cooldown_seconds > 0:
-                    time.sleep(self.config.voice.post_tts_cooldown_seconds)
-                deadline = time.time() + window
-                continue
-
-            reply = reply_box[0]
-
-            # ------ Interruptible TTS ------
             if reply:
                 logging.info("Agent reply: %s", reply)
-
-                # Fresh monitor for the TTS phase
-                interrupt_event = threading.Event()
-                monitor_stop = threading.Event()
-                monitor_thread = threading.Thread(
-                    target=self.wakeword.monitor_for_interrupt,
-                    args=(monitor_stop, interrupt_event),
-                    daemon=True,
-                )
-                monitor_thread.start()
-
-                completed = self.tts.speak(
-                    reply,
-                    interrupt_check=lambda: interrupt_event.is_set(),
-                )
-
-                monitor_stop.set()
-                monitor_thread.join(timeout=2)
-
-                if not completed or interrupt_event.is_set():
-                    logging.info("User interrupted during TTS")
-                    self.tts.speak("Go ahead.")
-                    if self.config.voice.post_tts_cooldown_seconds > 0:
-                        time.sleep(self.config.voice.post_tts_cooldown_seconds)
+                interrupted = self._speak_interruptible(reply)
+                if interrupted:
                     deadline = time.time() + window
                     continue
             else:
@@ -210,3 +143,44 @@ class VoiceLoop:
 
         logging.info("Conversation window expired, returning to wake word mode")
         self.orchestrator.resume()
+
+    # ------------------------------------------------------------------
+    # Interruptible TTS — speak sentence-by-sentence, listening briefly
+    # between each for interrupt phrases via STT.
+    # ------------------------------------------------------------------
+
+    _INTERRUPT_PHRASES = ["stop", "let me interrupt", "listen up"]
+    _INTERRUPT_LISTEN_SEC = 1.0  # seconds to record between sentences
+
+    def _speak_interruptible(self, text: str) -> bool:
+        """Speak *text* sentence-by-sentence with interrupt-phrase checks.
+
+        Returns ``True`` if the user interrupted, ``False`` if finished
+        speaking normally.
+        """
+        sentences = [s.strip() for s in re.split(r'(?<=[.!?;:])\s+', text) if s.strip()]
+        if not sentences:
+            return False
+
+        for i, sentence in enumerate(sentences):
+            self.tts.speak(sentence)
+
+            # After the last sentence there's nothing left to interrupt.
+            if i >= len(sentences) - 1:
+                break
+
+            # Brief listen for an interrupt command between sentences.
+            snippet = self.stt.transcribe_once(self._INTERRUPT_LISTEN_SEC)
+            if snippet:
+                normalized = snippet.lower().strip()
+                if any(phrase in normalized for phrase in self._INTERRUPT_PHRASES):
+                    logging.info(
+                        "Interrupt phrase detected ('%s'), stopping playback.",
+                        snippet,
+                    )
+                    self.tts.speak("Go ahead.")
+                    if self.config.voice.post_tts_cooldown_seconds > 0:
+                        time.sleep(self.config.voice.post_tts_cooldown_seconds)
+                    return True
+
+        return False

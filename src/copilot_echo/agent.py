@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import concurrent.futures
+import json
 import logging
 import os
 import threading
@@ -127,9 +128,35 @@ class Agent:
                 self._build_session_config()
             )
             self._started = True
+            await self._log_available_tools()
         except Exception:
             logging.exception("Failed to start Copilot agent")
             self._started = False
+
+    async def _log_available_tools(self) -> None:
+        """Log the tools that the session actually has access to."""
+        try:
+            if not self._session:
+                return
+            # Ask the agent what tools it has by sending a diagnostic query
+            # (the session object may expose tools directly on some SDK versions)
+            session = self._session
+            if hasattr(session, "available_tools"):
+                tools = session.available_tools
+                if tools:
+                    names = [t.get("name", "?") if isinstance(t, dict) else str(t) for t in tools]
+                    logging.info("Session tools (%d): %s", len(names), ", ".join(names))
+                else:
+                    logging.info("Session reports no available tools")
+            elif hasattr(session, "tools"):
+                tools = session.tools
+                if tools:
+                    names = [t.get("name", "?") if isinstance(t, dict) else str(t) for t in tools]
+                    logging.info("Session tools (%d): %s", len(names), ", ".join(names))
+            else:
+                logging.info("Session object has no tools attribute — tool list unavailable for diagnostics")
+        except Exception:
+            logging.debug("Could not retrieve session tools", exc_info=True)
 
     async def _shutdown(self) -> None:
         if self._session:
@@ -174,7 +201,8 @@ class Agent:
             "conversational — they will be read aloud via text-to-speech. Avoid markdown "
             "formatting, code blocks, or bullet lists in your replies since the user is "
             "listening, not reading. When referencing work items, read out the ID, title, "
-            "and key fields naturally."
+            "and key fields naturally. You HAVE Azure DevOps MCP tools available — use them "
+            "when asked about work items, pull requests, or repos in Azure DevOps."
         )
 
         # Read MCP servers from the global Copilot CLI config so all
@@ -194,7 +222,6 @@ class Agent:
             "system_message": {"mode": "append", "content": system_content},
             "on_permission_request": approve_permission,
             "on_user_input_request": handle_user_input,
-            "config_dir": os.path.expanduser("~/.copilot"),
         }
 
         if mcp_servers:
@@ -208,8 +235,6 @@ class Agent:
     @staticmethod
     def _load_global_mcp_servers() -> dict:
         """Load MCP server definitions from the global Copilot CLI config."""
-        import json
-
         config_path = os.path.expanduser("~/.copilot/config.json")
         if not os.path.exists(config_path):
             logging.warning("Global Copilot CLI config not found at %s", config_path)
@@ -226,6 +251,41 @@ class Agent:
                     safe_name = name.replace(" ", "_")
                     if "tools" not in srv:
                         srv["tools"] = ["*"]
+                    # Give servers enough time to start (60 s for slow starters)
+                    if "timeout" not in srv:
+                        srv["timeout"] = 60_000
+                    # For stdio servers, merge parent environment so child
+                    # processes can find binaries (node, npx, az CLI, etc.)
+                    if srv.get("type") in ("stdio", "local", None):
+                        srv_env = srv.get("env", {})
+                        merged_env = dict(os.environ)
+                        merged_env.update(srv_env)
+                        srv["env"] = merged_env
+                        # If cwd is not set and command is "node" with an
+                        # absolute path arg, derive cwd from the script path
+                        # so Node resolves local node_modules correctly.
+                        # Use the project root (two levels up from dist/x.js
+                        # or one level up from x.js).
+                        if "cwd" not in srv and srv.get("command") == "node":
+                            args = srv.get("args", [])
+                            if args:
+                                script = args[0].replace("/", os.sep)
+                                script_dir = os.path.dirname(os.path.abspath(script))
+                                # Walk up to find node_modules
+                                candidate = script_dir
+                                for _ in range(3):
+                                    if os.path.isdir(os.path.join(candidate, "node_modules")):
+                                        srv["cwd"] = candidate
+                                        logging.info(
+                                            "Auto-set cwd for %s → %s",
+                                            safe_name,
+                                            candidate,
+                                        )
+                                        break
+                                    parent = os.path.dirname(candidate)
+                                    if parent == candidate:
+                                        break
+                                    candidate = parent
                     sanitized[safe_name] = srv
                 servers = sanitized
                 logging.info(
