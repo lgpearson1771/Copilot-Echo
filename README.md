@@ -25,6 +25,32 @@ Starter scaffold. Voice pipeline, tray UI, and Copilot SDK wiring are stubbed.
    - `./run.ps1 -m copilot_echo.app`
    - Or: `run.bat -m copilot_echo.app`
 
+## Knowledge File
+
+Copilot Echo supports a **personal knowledge file** that injects persistent context into the agent's system prompt. This lets you teach the agent facts you'd otherwise have to repeat every session — your ADO project, team name, common queries, preferences, etc.
+
+1. Create `config/knowledge.md` (gitignored — it's personal to each developer).
+2. Set `agent.knowledge_file` in your `config/config.yaml`:
+   ```yaml
+   agent:
+     knowledge_file: "config/knowledge.md"
+   ```
+3. Write any facts in plain markdown. Example:
+   ```markdown
+   # Agent Knowledge
+
+   ## Azure DevOps
+   - Organization: msazure
+   - Default project: One
+   - All my work items are in the One project unless I say otherwise.
+
+   ## Preferences
+   - Keep answers concise (voice assistant).
+   ```
+4. Restart the app. You'll see `Loaded knowledge file (N chars)` in the log.
+
+Edit the file any time and restart to update the agent's context.
+
 ## Configuration
 Edit `config\config.yaml` for wake word, audio device, repo path, and tool allowlist.
 

@@ -40,6 +40,11 @@ class VoiceConfig:
 
 
 @dataclass
+class AgentConfig:
+    knowledge_file: Optional[str] = None
+
+
+@dataclass
 class RepoConfig:
     default_path: Optional[str] = None
     require_confirmation: bool = True
@@ -54,6 +59,7 @@ class ToolsConfig:
 class Config:
     app: AppConfig
     voice: VoiceConfig
+    agent: AgentConfig
     repo: RepoConfig
     tools: ToolsConfig
 
@@ -70,6 +76,7 @@ def load_config() -> Config:
     return Config(
         app=AppConfig(**data.get("app", {})),
         voice=VoiceConfig(**data.get("voice", {})),
+        agent=AgentConfig(**data.get("agent", {})),
         repo=RepoConfig(**data.get("repo", {})),
         tools=ToolsConfig(**data.get("tools", {})),
     )

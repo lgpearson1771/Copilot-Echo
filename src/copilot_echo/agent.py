@@ -205,6 +205,14 @@ class Agent:
             "when asked about work items, pull requests, or repos in Azure DevOps."
         )
 
+        # Append persistent knowledge from the knowledge file.
+        knowledge = self._load_knowledge()
+        if knowledge:
+            system_content += (
+                "\n\nBelow is persistent context the user has provided. "
+                "Always keep these facts in mind:\n\n" + knowledge
+            )
+
         # Read MCP servers from the global Copilot CLI config so all
         # servers configured there are available to the agent.
         mcp_servers = self._load_global_mcp_servers()
@@ -231,6 +239,27 @@ class Agent:
             config["working_directory"] = self.config.repo.default_path
 
         return config
+
+    def _load_knowledge(self) -> str:
+        """Load persistent knowledge from the configured knowledge file."""
+        rel = self.config.agent.knowledge_file
+        if not rel:
+            return ""
+        # Resolve relative to project root (two levels up from this file)
+        root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        path = os.path.join(root, rel)
+        if not os.path.exists(path):
+            logging.warning("Knowledge file not found: %s", path)
+            return ""
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                content = f.read().strip()
+            if content:
+                logging.info("Loaded knowledge file (%d chars): %s", len(content), path)
+            return content
+        except Exception:
+            logging.exception("Failed to read knowledge file %s", path)
+            return ""
 
     @staticmethod
     def _load_global_mcp_servers() -> dict:
