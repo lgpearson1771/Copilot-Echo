@@ -40,10 +40,21 @@ class VoiceConfig:
 
 
 @dataclass
+class AutonomousRoutine:
+    name: str = ""
+    trigger_phrases: List[str] = field(default_factory=list)
+    prompt: str = ""
+    max_steps: Optional[int] = None  # overrides global default if set
+
+
+@dataclass
 class AgentConfig:
     knowledge_file: Optional[str] = None
     projects_dir: str = "config/projects"
     project_max_chars: int = 4000
+    autonomous_routines: List[AutonomousRoutine] = field(default_factory=list)
+    autonomous_max_steps: int = 10
+    autonomous_max_minutes: int = 10
 
 
 @dataclass
@@ -78,7 +89,18 @@ def load_config() -> Config:
     return Config(
         app=AppConfig(**data.get("app", {})),
         voice=VoiceConfig(**data.get("voice", {})),
-        agent=AgentConfig(**data.get("agent", {})),
+        agent=_load_agent_config(data.get("agent", {})),
         repo=RepoConfig(**data.get("repo", {})),
         tools=ToolsConfig(**data.get("tools", {})),
     )
+
+
+def _load_agent_config(data: dict) -> AgentConfig:
+    """Build AgentConfig, converting raw routine dicts to dataclasses."""
+    routines_raw = data.pop("autonomous_routines", [])
+    cfg = AgentConfig(**data)
+    if routines_raw:
+        cfg.autonomous_routines = [
+            AutonomousRoutine(**r) for r in routines_raw
+        ]
+    return cfg

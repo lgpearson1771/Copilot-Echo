@@ -39,6 +39,10 @@ Substitute `run.bat` for `run.ps1` if preferred.
 | **"Start a project called {name}"** | Creates a new project knowledge base |
 | **"Finish / close / archive project {name}"** | Archives the project |
 | **"List my projects"** | Reads out active and archived project names |
+| **"Morning standup"** (or any configured trigger phrase) | Starts a pre-configured autonomous routine |
+| **"Get to work on {task}"** | Starts an ad-hoc autonomous routine for the given task |
+| **Triple-tap Caps Lock** | Instantly interrupts TTS or autonomous mode (works during agent processing too) |
+| **Tray → Stop** | Same as hotkey — interrupts current operation |
 
 ## Configuration Files
 

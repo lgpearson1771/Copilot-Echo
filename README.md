@@ -11,7 +11,8 @@ A local-only Windows tray app that listens for a wake word, routes voice command
 - **Copilot SDK agent** — routes your voice input to GitHub Copilot via the `github-copilot-sdk`, with full async bridge.
 - **MCP server integration** — automatically loads all MCP servers from the global Copilot CLI config (`~/.copilot/config.json`). Also runs a local project knowledge MCP server so the agent can read and write project files autonomously. Supports stdio servers with env merging, cwd auto-detection, and 60s startup timeout.
 - **Knowledge file** — a personal markdown file injected into the agent's system prompt so it remembers your org, project, repos, and preferences across sessions.
-- **System tray UI** — runs as a Windows tray icon with Pause / Resume / Quit controls and status display.
+- **System tray UI** — runs as a Windows tray icon with Pause / Resume / Stop / Quit controls and status display.
+- **"Get to Work" autonomous mode** — pre-configured routines (standup prep, PR review) and ad-hoc "get to work on {task}" for multi-step agent workflows. The agent works step-by-step, speaking progress aloud, with interruptible playback and safety limits.
 - **Voice commands** — built-in phrases for controlling the app hands-free (see below).
 
 ## Requirements
@@ -52,6 +53,11 @@ Or use `run.bat` instead of `run.ps1`.
 | **"Start a project called {name}"** | Creates a new project knowledge base |
 | **"Finish / close / archive project {name}"** | Archives the project |
 | **"List my projects"** | Reads out active and archived project names |
+| **"Morning standup"** (or configured trigger) | Starts a pre-configured autonomous routine |
+| **"Get to work on {task}"** | Starts an ad-hoc autonomous routine for the given task |
+| **"Stop" / interrupt phrases** (during routine) | Stops autonomous mode and returns to conversation |
+| **Triple-tap Caps Lock** | Instantly interrupts TTS or autonomous mode (even mid-agent-call) |
+| **Tray → Stop** | Same as hotkey — interrupts current operation |
 
 ## Knowledge File
 
@@ -96,6 +102,53 @@ All project files are gitignored — each developer maintains their own.
 
 See [docs/project_knowledge.md](docs/project_knowledge.md) for the full design, voice commands, lifecycle, and configuration.
 
+## Autonomous Mode ("Get to Work")
+
+Copilot Echo can execute multi-step agent workflows autonomously — the agent works step by step, speaking progress aloud, while you listen (or interrupt at any point).
+
+### Pre-configured Routines
+
+Define routines in `config/config.yaml`:
+
+```yaml
+agent:
+  autonomous_max_steps: 10
+  autonomous_max_minutes: 10
+  autonomous_routines:
+    - name: "Morning Standup"
+      trigger_phrases: ["morning standup", "daily standup"]
+      prompt: >
+        Prepare my morning standup summary. Check my active work items,
+        review any PRs I'm assigned to, and summarize what I worked on
+        yesterday.
+      max_steps: 5
+```
+
+Say any trigger phrase (e.g. "morning standup") during conversation mode to start the routine.
+
+### Ad-hoc Tasks
+
+Say **"get to work on {task}"** for any one-off autonomous workflow:
+
+> "Hey Jarvis… get to work on reviewing the open PRs for the metrics repo"
+
+### How It Works
+
+1. The agent receives your routine/task as a structured prompt with instructions to work step by step.
+2. After each step, the agent speaks a concise summary and signals `NEXT` (more to do) or `DONE` (finished).
+3. Between steps, the mic listens briefly — say **"stop"** or any interrupt phrase to halt and return to conversation mode.
+4. Safety limits (`autonomous_max_steps`, `autonomous_max_minutes`) prevent runaway loops.
+
+### Stopping a Routine
+
+You have three ways to interrupt an autonomous routine:
+
+- **Voice** — say "stop", "let me interrupt", or "listen up" between sentences or steps
+- **Triple-tap Caps Lock** — works instantly, even while the agent is processing or TTS is speaking (cancels the in-flight agent request)
+- **Tray → Stop** — right-click the tray icon and click Stop
+
+After interrupting, you return to conversation mode and can keep chatting.
+
 ## Configuration
 
 Edit `config/config.yaml`. Key settings:
@@ -115,6 +168,9 @@ Edit `config/config.yaml`. Key settings:
 | `agent.knowledge_file` | `null` | Path to personal knowledge file |
 | `agent.projects_dir` | `config/projects` | Directory for project knowledge bases |
 | `agent.project_max_chars` | `4000` | Max chars per project file before summarization |
+| `agent.autonomous_max_steps` | `10` | Max agent round-trips per autonomous routine |
+| `agent.autonomous_max_minutes` | `10` | Hard time limit per autonomous routine |
+| `agent.autonomous_routines` | `[]` | List of pre-configured routines (see example.yaml) |
 
 To list available audio input devices:
 
@@ -136,8 +192,8 @@ See `docs/wakeword_training.md` for a step-by-step guide.
 
 ```text
 app.py              → Entry point, starts agent + tray
-tray.py             → System tray icon (pystray), spawns voice loop thread
-orchestrator.py     → State machine (Idle/Listening/Processing/Paused)
+tray.py             → System tray icon (pystray), Caps Lock hotkey listener, spawns voice loop thread
+orchestrator.py     → State machine (Idle/Listening/Processing/Autonomous/Paused)
 agent.py            → Async Copilot SDK bridge, MCP server loading, knowledge injection
 project_mcp.py      → Local MCP server exposing project knowledge tools to the agent
 voice/
@@ -163,7 +219,7 @@ projects.py         → Project knowledge base management (create/archive/list/l
 - [x] MCP server auto-loading from global CLI config
 - [x] Personal knowledge file for persistent agent context
 - [x] Project knowledge base for long-running projects
-- [ ] "Get to work" autonomous mode
+- [x] "Get to work" autonomous mode
 - [ ] Teams/Zoom auto-pause integration
 - [ ] Error handling & resilience hardening
 - [ ] End-to-end testing

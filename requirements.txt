@@ -1,6 +1,7 @@
 github-copilot-sdk
 pystray
 pillow
+pynput
 sounddevice
 numpy
 openwakeword

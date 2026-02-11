@@ -45,6 +45,29 @@ agent:
   projects_dir: "config/projects"          # root directory for project files
   project_max_chars: 4000                   # max chars per active project before summarization
 
+  # Autonomous "Get to Work" mode
+  # Pre-configured routines triggered by voice phrases.
+  # You can also say "get to work on {task}" for ad-hoc autonomous tasks.
+  autonomous_max_steps: 10    # max agent round-trips per routine
+  autonomous_max_minutes: 10  # hard time limit per routine
+  autonomous_routines: []
+  # Example routines:
+  # autonomous_routines:
+  #   - name: "Morning Standup"
+  #     trigger_phrases: ["morning standup", "daily standup", "standup prep"]
+  #     prompt: >
+  #       Prepare my morning standup summary.  Check my active Azure DevOps
+  #       work items, review any PRs I'm assigned to, and list what I worked
+  #       on yesterday.  Summarize in a few bullet points suitable for a
+  #       standup meeting.
+  #     max_steps: 5
+  #   - name: "PR Review"
+  #     trigger_phrases: ["review my PRs", "check pull requests", "PR review"]
+  #     prompt: >
+  #       List all open pull requests assigned to me.  For each one, summarize
+  #       the description, check the build status, and highlight any review
+  #       comments that need my attention.
+
 repo:
   default_path: null
   require_confirmation: true

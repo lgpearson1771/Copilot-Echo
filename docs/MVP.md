@@ -23,8 +23,9 @@ What needs to be done before Copilot Echo is ready for a full launch.
 
 ## System Tray — DONE
 
-- [x] Tray icon with status display (Idle / Conversation / Processing / Paused)
-- [x] Pause / Resume / Quit menu items
+- [x] Tray icon with status display (Idle / Conversation / Processing / Working / Paused)
+- [x] Pause / Resume / Stop / Quit menu items
+- [x] Triple-tap Caps Lock global hotkey to interrupt (via pynput)
 
 ## Documentation — DONE
 
@@ -38,6 +39,11 @@ What needs to be done before Copilot Echo is ready for a full launch.
 
 ## Remaining MVP Work
 
+> **Recommended build order:** Testing & Polish → Teams Auto-Pause →
+> Error Handling & Resilience.  Testing is next so the core pipeline,
+> project KB, and autonomous mode are validated end-to-end before adding
+> more features on top.  Error handling goes last because it's a
+> hardening pass that benefits from having all features in place first.
 ### Project Knowledge Base \u2014 DONE
 
 > Per-project knowledge files that accumulate context over a project's
@@ -54,18 +60,21 @@ What needs to be done before Copilot Echo is ready for a full launch.
 - [x] On-demand loading of archived projects when user asks about past work
 - [x] Config: `agent.projects_dir`, `agent.project_max_chars`
 
-### "Get to Work" Autonomous Mode
+### "Get to Work" Autonomous Mode — DONE
 
 > Voice command that tells the agent to work through a plan autonomously
 > (e.g., triage work items, summarize PRs, run a checklist) with periodic
 > voice status updates.
 
-- [ ] Define supported autonomous workflows (daily standup prep, PR review, etc.)
-- [ ] Add "get to work" / "start your routine" voice command detection in loop.py
-- [ ] Build autonomous loop: agent sends itself follow-up prompts from a plan
-- [ ] Periodic TTS status updates ("Checked 3 PRs, 2 need your attention")
-- [ ] Interrupt support during autonomous mode (voice phrase to stop/redirect)
-- [ ] Config: `agent.autonomous_routines` or similar for user-defined workflows
+- [x] Define supported autonomous workflows (daily standup prep, PR review, etc.)
+- [x] Add "get to work" / trigger phrase voice command detection in loop.py
+- [x] Build autonomous loop: agent sends itself follow-up prompts step by step
+- [x] Periodic TTS status updates with interruptible sentence-by-sentence playback
+- [x] Interrupt support: voice phrases between sentences/steps
+- [x] Interrupt support: triple-tap Caps Lock hotkey (instant, cancels mid-flight agent call)
+- [x] Interrupt support: tray Stop button
+- [x] Ad-hoc "get to work on {task}" for one-off autonomous tasks
+- [x] Config: `agent.autonomous_routines`, `autonomous_max_steps`, `autonomous_max_minutes`
 
 ### Teams Auto-Pause
 
