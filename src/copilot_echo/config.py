@@ -16,7 +16,7 @@ class AppConfig:
 @dataclass
 class VoiceConfig:
     wakeword_engine: str = "stt"
-    wake_word: str = "hey copilot"
+    wake_word: str = "hey jarvis"
     audio_device: Optional[int] = None
     audio_device_name: Optional[str] = None
     sample_rate: int = 16000

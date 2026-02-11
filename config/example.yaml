@@ -3,33 +3,45 @@ app:
   log_level: "INFO"
 
 voice:
-  # wakeword_engine: "stt" (keyword check) or "openwakeword" (real wake word)
-  wakeword_engine: "stt"
-  wake_word: "hey copilot"
-  audio_device: null
-  audio_device_name: null
+  # Wake word detection: "stt" (keyword match) or "openwakeword" (recommended)
+  wakeword_engine: "openwakeword"
+  wake_word: "hey jarvis"
+  audio_device: null          # integer device index, or null for default
+  audio_device_name: null      # substring match against device name (alternative to index)
   sample_rate: 16000
   wake_listen_seconds: 2.5
   command_listen_seconds: 5.0
-  # extra delay after speaking to avoid immediate re-triggers
-  post_tts_cooldown_seconds: 0.5
-  # openwakeword settings (only used when wakeword_engine is "openwakeword")
-  # inference framework: "tflite" or "onnx"
-  wakeword_inference_framework: "tflite"
-  # Examples: "alexa", "hey mycroft", "hey jarvis", "hey rhasspy", "current weather", "timers"
-  wakeword_models: []
-  # Example custom model path:
-  # wakeword_models: ["models/hey_copilot.tflite"]
-  wakeword_threshold: 0.6
+
+  # VAD-based recording
+  utterance_end_seconds: 1.5   # silence after speech to end an utterance
+  max_listen_seconds: 60.0     # hard cap on recording duration
+  stt_energy_threshold: 0.01   # RMS level above which audio counts as speech
+
+  # Conversation mode
+  conversation_window_seconds: 5.0  # silence timeout before returning to wake word mode
+  post_tts_cooldown_seconds: 1.0    # delay after TTS to avoid self-triggering
+
+  # Openwakeword settings (only used when wakeword_engine is "openwakeword")
+  wakeword_inference_framework: "onnx"  # "onnx" or "tflite"
+  # Built-in models: "alexa", "hey mycroft", "hey jarvis", "hey rhasspy", etc.
+  # Or a path to a custom model: ["models/hey_echo.onnx"]
+  wakeword_models: ["hey jarvis"]
+  wakeword_threshold: 0.8
   wakeword_chunk_size: 1280
-  wakeword_holdoff_seconds: 1.0
-  # Wakeword VAD threshold (0 disables VAD filtering)
-  wakeword_vad_threshold: 0.0
-  # Enable Speex noise suppression for wakeword detection
+  wakeword_holdoff_seconds: 2.0
+  wakeword_vad_threshold: 0.2         # 0 disables VAD filtering
   wakeword_speex_noise_suppression: false
-  stt_model: "base"
-  stt_device: "cpu"
-  stt_compute_type: "int8"
+
+  # Whisper STT model
+  stt_model: "base"       # tiny, base, small, medium, large
+  stt_device: "cpu"        # cpu or cuda
+  stt_compute_type: "int8" # int8, float16, float32
+
+agent:
+  # Personal knowledge file injected into the agent system prompt.
+  # Create config/knowledge.md with persistent facts (org, project, repos, etc.).
+  # This file is gitignored — each developer maintains their own.
+  knowledge_file: null  # e.g. "config/knowledge.md"
 
 repo:
   default_path: null
