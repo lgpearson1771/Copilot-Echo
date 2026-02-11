@@ -38,7 +38,7 @@ What needs to be done before Copilot Echo is ready for a full launch.
 
 ## Remaining MVP Work
 
-### Project Knowledge Base
+### Project Knowledge Base \u2014 DONE
 
 > Per-project knowledge files that accumulate context over a project's
 > lifetime — work items, PRs, decisions, blockers, lessons learned.
@@ -50,8 +50,8 @@ What needs to be done before Copilot Echo is ready for a full launch.
 - [x] Voice command: "list my projects" → read active/archived project names
 - [x] Inject all active project files into agent system prompt at startup
 - [x] Auto-capture: agent appends work item/PR/decision entries during conversations
-- [ ] Size management: summarize older entries when project file approaches cap
-- [ ] On-demand loading of archived projects when user asks about past work
+- [x] Size management: summarize older entries when project file approaches cap
+- [x] On-demand loading of archived projects when user asks about past work
 - [x] Config: `agent.projects_dir`, `agent.project_max_chars`
 
 ### "Get to Work" Autonomous Mode

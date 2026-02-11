@@ -100,7 +100,7 @@ When a new project is created, the file is initialized with this structure:
 
 ### Auto-Capture
 
-During normal conversations, when the agent interacts with project-related work items or PRs, it should automatically append brief entries to the active project file:
+The agent has MCP tools (`append_project_entry`, `compact_project_section`, etc.) that let it directly read and write project files. During normal conversations, when the agent interacts with project-related work items or PRs, it automatically appends brief entries to the active project file:
 
 - **Work item resolved:** `- [2026-02-11] WI#12345: Fixed query timeout in dashboard (resolved)`
 - **PR completed:** `- [2026-02-11] PR#6789: Added retry logic to metrics pipeline (merged)`
@@ -118,15 +118,28 @@ When a project is finished:
 3. The full project file is moved from `active/` to `archive/`.
 4. The archived file is no longer injected into the system prompt.
 
-If you later ask about the project ("what did we do in the query migration project?"), the agent loads the archived file on demand to answer in detail.
+If you later ask about the project ("what did we do in the query migration project?"), the agent sees the archived project name in its system prompt and uses the `get_archived_project` MCP tool to load the full content on demand — no voice command needed.
 
 ### Size Management
 
 To prevent the system prompt from growing too large:
 
 - Each active project file is capped at a configurable size (default: ~4000 chars).
-- When a project file approaches the cap, the agent summarizes older entries (progress log, resolved blockers) into a compact form and replaces the verbose entries.
+- Files exceeding the cap are truncated when injected into the system prompt, with a notice asking the agent to compact older entries.
+- The agent uses the `compact_project_section` MCP tool to replace verbose entries with a compact summary, keeping the file within the cap.
 - The number of active projects is not artificially limited, but users are encouraged to archive completed work to keep things lean.
+
+### MCP Tools
+
+The agent accesses project files via a local MCP server (`project_mcp.py`) that is automatically started as a stdio subprocess. Available tools:
+
+| Tool | Purpose |
+| --- | --- |
+| `list_all_projects()` | Discover active and archived project names |
+| `get_active_project(name)` | Read an active project in full |
+| `get_archived_project(name)` | Load an archived project on demand |
+| `append_project_entry(name, section, entry)` | Log a dated one-liner to a project section |
+| `compact_project_section(name, section, condensed_content)` | Replace a section with shorter content |
 
 ## Configuration
 

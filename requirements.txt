@@ -8,3 +8,4 @@ faster-whisper
 pyttsx3
 psutil
 pyyaml
+mcp

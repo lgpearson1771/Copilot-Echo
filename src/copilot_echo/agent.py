@@ -7,6 +7,7 @@ import concurrent.futures
 import json
 import logging
 import os
+import sys
 import threading
 from typing import Optional
 
@@ -214,25 +215,47 @@ class Agent:
             )
 
         # Append active project knowledge bases.
-        from copilot_echo.projects import load_active_projects
+        from copilot_echo.projects import list_projects, load_active_projects
 
-        projects_content = load_active_projects(self.config.agent.projects_dir)
+        projects_content = load_active_projects(
+            self.config.agent.projects_dir,
+            max_chars=self.config.agent.project_max_chars,
+        )
         if projects_content:
             system_content += (
                 "\n\nThe following are ACTIVE PROJECT knowledge bases. "
-                "Use them to understand ongoing work. When you resolve a work item, "
-                "merge a PR, make a key decision, or hit a blocker related to one of "
-                "these projects, append a one-line dated entry to the appropriate "
-                "section in the project file (Progress Log, Key Decisions, Blockers & "
-                "Issues, or Lessons Learned). Keep entries brief — e.g. "
-                "'[2026-02-11] WI#12345: Fixed query timeout (resolved)'. "
-                "Do NOT ask the user before logging — just do it.\n\n"
+                "Use them to understand ongoing work.\n\n"
+                "You have project knowledge tools available "
+                "(via the copilot_echo_projects MCP server):\n"
+                "- append_project_entry(name, section, entry) — log work items, "
+                "PRs, decisions, blockers, or lessons learned. Include a date "
+                "prefix like '[2026-02-11]'. Do NOT ask before logging — just do it.\n"
+                "- get_active_project(name) — read an active project in full.\n"
+                "- compact_project_section(name, section, condensed_content) — "
+                "replace a section with a shorter summary when warned about size.\n"
+                "- list_all_projects() — discover active and archived projects.\n"
+                "- get_archived_project(name) — load an archived project's content.\n\n"
                 + projects_content
+            )
+
+        # Tell the agent about archived projects so it can load them on demand.
+        _, archived_names = list_projects(self.config.agent.projects_dir)
+        if archived_names:
+            system_content += (
+                "\n\nArchived projects available for on-demand loading: "
+                + ", ".join(archived_names)
+                + ". When the user asks about a past project, or when historical "
+                "context would help answer a question, use get_archived_project "
+                "to retrieve the full content. You do not need to ask the user — "
+                "load it proactively when relevant."
             )
 
         # Read MCP servers from the global Copilot CLI config so all
         # servers configured there are available to the agent.
         mcp_servers = self._load_global_mcp_servers()
+
+        # Register the local project knowledge MCP server.
+        mcp_servers.update(self._build_project_mcp_server())
 
         def approve_permission(request, context=None):
             kind = request.get("kind", "unknown") if isinstance(request, dict) else "unknown"
@@ -277,6 +300,30 @@ class Agent:
         except Exception:
             logging.exception("Failed to read knowledge file %s", path)
             return ""
+
+    def _build_project_mcp_server(self) -> dict:
+        """Return an MCP server entry for the local project knowledge server."""
+        root = os.path.dirname(
+            os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        )
+        merged_env = dict(os.environ)
+        merged_env["COPILOT_ECHO_PROJECTS_DIR"] = self.config.agent.projects_dir
+        merged_env["COPILOT_ECHO_PROJECT_MAX_CHARS"] = str(
+            self.config.agent.project_max_chars
+        )
+        server = {
+            "copilot_echo_projects": {
+                "type": "stdio",
+                "command": sys.executable,
+                "args": ["-m", "copilot_echo.project_mcp"],
+                "cwd": root,
+                "env": merged_env,
+                "tools": ["*"],
+                "timeout": 10_000,
+            }
+        }
+        logging.info("Registered local project MCP server (cwd=%s)", root)
+        return server
 
     @staticmethod
     def _load_global_mcp_servers() -> dict:

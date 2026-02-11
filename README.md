@@ -9,7 +9,7 @@ A local-only Windows tray app that listens for a wake word, routes voice command
 - **Local text-to-speech** — pyttsx3, sentence-by-sentence with interruptible playback.
 - **Conversation mode** — after the wake word, stays in a listening loop (configurable window) so you can have multi-turn conversations without repeating the wake word.
 - **Copilot SDK agent** — routes your voice input to GitHub Copilot via the `github-copilot-sdk`, with full async bridge.
-- **MCP server integration** — automatically loads all MCP servers from the global Copilot CLI config (`~/.copilot/config.json`). Supports stdio servers with env merging, cwd auto-detection, and 60s startup timeout.
+- **MCP server integration** — automatically loads all MCP servers from the global Copilot CLI config (`~/.copilot/config.json`). Also runs a local project knowledge MCP server so the agent can read and write project files autonomously. Supports stdio servers with env merging, cwd auto-detection, and 60s startup timeout.
 - **Knowledge file** — a personal markdown file injected into the agent's system prompt so it remembers your org, project, repos, and preferences across sessions.
 - **System tray UI** — runs as a Windows tray icon with Pause / Resume / Quit controls and status display.
 - **Voice commands** — built-in phrases for controlling the app hands-free (see below).
@@ -87,9 +87,10 @@ For long-running projects (weeks/months), Copilot Echo can maintain **per-projec
 
 - **"Start a project called {name}"** → creates a structured project file in `config/projects/active/`
 - Active project files are **auto-injected** into the agent's system prompt alongside your knowledge file
-- The agent **auto-captures** relevant activity (work items resolved, PRs merged, decisions made)
+- The agent **auto-captures** relevant activity using MCP tools — appending entries for work items resolved, PRs merged, decisions made, and blockers
+- When a project file approaches the character cap, the agent autonomously **summarizes** older entries to stay within limits
 - **"Finish project {name}"** → archives the project, summarizes key takeaways into your knowledge file
-- Archived projects can still be queried on demand
+- Archived projects are **loaded on demand** — the agent sees their names and autonomously loads context when relevant to a question
 
 All project files are gitignored — each developer maintains their own.
 
@@ -138,6 +139,7 @@ app.py              → Entry point, starts agent + tray
 tray.py             → System tray icon (pystray), spawns voice loop thread
 orchestrator.py     → State machine (Idle/Listening/Processing/Paused)
 agent.py            → Async Copilot SDK bridge, MCP server loading, knowledge injection
+project_mcp.py      → Local MCP server exposing project knowledge tools to the agent
 voice/
   loop.py           → Main voice loop: wake word → conversation → agent → TTS
   wakeword.py       → Wake word detection (openwakeword / STT fallback)

@@ -124,9 +124,13 @@ def list_projects(projects_dir: str) -> tuple[List[str], List[str]]:
     return active, archived
 
 
-def load_active_projects(projects_dir: str) -> str:
+def load_active_projects(projects_dir: str, max_chars: int = 0) -> str:
     """Read and concatenate all active project files into a single string
-    suitable for injection into the system prompt."""
+    suitable for injection into the system prompt.
+
+    If *max_chars* is > 0, individual files that exceed the cap are
+    truncated with a notice asking the agent to compact them.
+    """
     active_dir, _ = _ensure_dirs(projects_dir)
     parts: list[str] = []
     try:
@@ -135,8 +139,21 @@ def load_active_projects(projects_dir: str) -> str:
                 continue
             path = os.path.join(active_dir, fname)
             content = _read(path)
-            if content:
-                parts.append(content)
+            if not content:
+                continue
+            if max_chars > 0 and len(content) > max_chars:
+                original_len = len(content)
+                content = (
+                    content[:max_chars]
+                    + "\n\n[TRUNCATED \u2014 file exceeds "
+                    + f"{max_chars} char cap. Use compact_project_section "
+                    + "to condense older entries.]"
+                )
+                logging.warning(
+                    "Project file %s exceeds cap (%d/%d chars) \u2014 truncated",
+                    fname, original_len, max_chars,
+                )
+            parts.append(content)
     except Exception:
         logging.exception("Failed to read active project files")
     if parts:
@@ -166,6 +183,128 @@ def get_project_path(name: str, projects_dir: str) -> Optional[str]:
     slug = _slugify(name)
     path = os.path.join(active_dir, f"{slug}.md")
     return path if os.path.exists(path) else None
+
+
+# ------------------------------------------------------------------
+# Section editing (used by MCP server)
+# ------------------------------------------------------------------
+
+_VALID_SECTIONS = {
+    "Repos & Work Items",
+    "Key Decisions",
+    "Progress Log",
+    "Blockers & Issues",
+    "Lessons Learned",
+}
+
+
+def append_entry(
+    name: str, section: str, entry: str, projects_dir: str
+) -> str:
+    """Append a dated one-liner to *section* in an active project.
+
+    Returns a status message.  Raises ``FileNotFoundError`` if the
+    project doesn't exist, or ``ValueError`` for an invalid section.
+    """
+    if section not in _VALID_SECTIONS:
+        raise ValueError(
+            f"Invalid section '{section}'. "
+            f"Valid sections: {', '.join(sorted(_VALID_SECTIONS))}"
+        )
+    path = get_project_path(name, projects_dir)
+    if not path:
+        raise FileNotFoundError(f"No active project '{name}'")
+
+    text = _read(path)
+    heading = f"## {section}"
+    idx = text.find(heading)
+    if idx == -1:
+        raise ValueError(f"Section '{section}' heading not found in project file")
+
+    # Find the end of the heading line
+    eol = text.find("\n", idx)
+    if eol == -1:
+        eol = len(text)
+
+    # Find the next section heading or end of file
+    next_heading = re.search(r"\n## ", text[eol + 1:])
+    if next_heading:
+        insert_pos = eol + 1 + next_heading.start()
+    else:
+        insert_pos = len(text)
+
+    # Strip trailing whitespace at insertion point and add entry
+    before = text[:insert_pos].rstrip()
+    after = text[insert_pos:]
+    dated_entry = f"\n- {entry}"
+    new_text = before + dated_entry + "\n" + after
+
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(new_text)
+
+    char_count = len(new_text)
+    msg = f"Entry added to {section} in project '{name}'."
+    logging.info(msg)
+    return f"{msg} File is now {char_count} chars."
+
+
+def replace_section(
+    name: str, section: str, new_content: str, projects_dir: str
+) -> str:
+    """Replace everything under *section* heading with *new_content*.
+
+    Used for compacting / summarizing older entries.  Returns a status
+    message.  Raises ``FileNotFoundError`` or ``ValueError`` on bad input.
+    """
+    if section not in _VALID_SECTIONS:
+        raise ValueError(
+            f"Invalid section '{section}'. "
+            f"Valid sections: {', '.join(sorted(_VALID_SECTIONS))}"
+        )
+    path = get_project_path(name, projects_dir)
+    if not path:
+        raise FileNotFoundError(f"No active project '{name}'")
+
+    text = _read(path)
+    heading = f"## {section}"
+    idx = text.find(heading)
+    if idx == -1:
+        raise ValueError(f"Section '{section}' heading not found in project file")
+
+    # End of heading line
+    eol = text.find("\n", idx)
+    if eol == -1:
+        eol = len(text)
+
+    # Find next section heading or end of file
+    next_heading = re.search(r"\n## ", text[eol + 1:])
+    if next_heading:
+        end_pos = eol + 1 + next_heading.start()
+    else:
+        end_pos = len(text)
+
+    before = text[: eol + 1]
+    after = text[end_pos:]
+    new_text = before + new_content.strip() + "\n" + after
+
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(new_text)
+
+    char_count = len(new_text)
+    msg = f"Section '{section}' replaced in project '{name}'."
+    logging.info(msg)
+    return f"{msg} File is now {char_count} chars."
+
+
+def read_active_project(name: str, projects_dir: str) -> Optional[str]:
+    """Read and return the full content of an active project.
+
+    Returns ``None`` if the project doesn't exist.
+    """
+    path = get_project_path(name, projects_dir)
+    if not path:
+        return None
+    return _read(path)
 
 
 # ------------------------------------------------------------------
