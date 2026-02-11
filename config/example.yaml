@@ -42,6 +42,8 @@ agent:
   # Create config/knowledge.md with persistent facts (org, project, repos, etc.).
   # This file is gitignored — each developer maintains their own.
   knowledge_file: null  # e.g. "config/knowledge.md"
+  projects_dir: "config/projects"          # root directory for project files
+  project_max_chars: 4000                   # max chars per active project before summarization
 
 repo:
   default_path: null

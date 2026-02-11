@@ -42,6 +42,8 @@ class VoiceConfig:
 @dataclass
 class AgentConfig:
     knowledge_file: Optional[str] = None
+    projects_dir: str = "config/projects"
+    project_max_chars: int = 4000
 
 
 @dataclass

@@ -10,6 +10,7 @@ from copilot_echo.orchestrator import Orchestrator, State
 from copilot_echo.voice.stt import SpeechToText
 from copilot_echo.voice.tts import TextToSpeech
 from copilot_echo.voice.wakeword import WakeWordDetector
+from copilot_echo import projects
 
 
 class VoiceLoop:
@@ -120,6 +121,14 @@ class VoiceLoop:
                 logging.info("Silence timeout reached")
                 break
 
+            # -- Project knowledge base commands --
+            project_handled = self._handle_project_command(normalized, text)
+            if project_handled:
+                deadline = time.time() + window
+                if self.config.voice.post_tts_cooldown_seconds > 0:
+                    time.sleep(self.config.voice.post_tts_cooldown_seconds)
+                continue
+
             logging.info("Transcript: %s", text)
             status_callback("Processing")
 
@@ -143,6 +152,84 @@ class VoiceLoop:
 
         logging.info("Conversation window expired, returning to wake word mode")
         self.orchestrator.resume()
+
+    # ------------------------------------------------------------------
+    # Project knowledge base voice commands
+    # ------------------------------------------------------------------
+
+    _START_PATTERNS = [
+        re.compile(r"start a project (?:called |named )?(.+)", re.IGNORECASE),
+        re.compile(r"create a project (?:called |named )?(.+)", re.IGNORECASE),
+        re.compile(r"new project (?:called |named )?(.+)", re.IGNORECASE),
+    ]
+    _FINISH_PATTERNS = [
+        re.compile(r"(?:finish|close|complete|end) (?:the )?project (?:called |named )?(.+)", re.IGNORECASE),
+        re.compile(r"archive (?:the )?project (?:called |named )?(.+)", re.IGNORECASE),
+    ]
+    _LIST_PHRASES = ["list my projects", "list projects", "show my projects", "what projects do i have"]
+
+    def _handle_project_command(self, normalized: str, original: str) -> bool:
+        """Check for project-related voice commands.  Returns True if handled."""
+        # List projects
+        if any(phrase in normalized for phrase in self._LIST_PHRASES):
+            return self._cmd_list_projects()
+
+        # Start a project — match against original text to preserve casing
+        for pat in self._START_PATTERNS:
+            m = pat.search(original)
+            if m:
+                return self._cmd_start_project(m.group(1).strip())
+
+        # Finish / archive a project
+        for pat in self._FINISH_PATTERNS:
+            m = pat.search(original)
+            if m:
+                return self._cmd_finish_project(m.group(1).strip())
+
+        return False
+
+    def _cmd_start_project(self, name: str) -> bool:
+        try:
+            projects.create_project(name, self.config.agent.projects_dir)
+            self.tts.speak(f"Project {name} created. I'll start tracking it.")
+            logging.info("Project created: %s", name)
+        except FileExistsError:
+            self.tts.speak(f"A project called {name} already exists.")
+        except Exception:
+            logging.exception("Failed to create project")
+            self.tts.speak("Sorry, I couldn't create that project.")
+        return True
+
+    def _cmd_finish_project(self, name: str) -> bool:
+        try:
+            projects.archive_project(name, self.config.agent.projects_dir)
+            self.tts.speak(f"Project {name} has been archived.")
+            logging.info("Project archived: %s", name)
+        except FileNotFoundError:
+            self.tts.speak(f"I couldn't find an active project called {name}.")
+        except Exception:
+            logging.exception("Failed to archive project")
+            self.tts.speak("Sorry, I couldn't archive that project.")
+        return True
+
+    def _cmd_list_projects(self) -> bool:
+        try:
+            active, archived = projects.list_projects(self.config.agent.projects_dir)
+            if not active and not archived:
+                self.tts.speak("You don't have any projects yet.")
+            else:
+                parts = []
+                if active:
+                    names = ", ".join(active)
+                    parts.append(f"Active projects: {names}.")
+                if archived:
+                    names = ", ".join(archived)
+                    parts.append(f"Archived projects: {names}.")
+                self.tts.speak(" ".join(parts))
+        except Exception:
+            logging.exception("Failed to list projects")
+            self.tts.speak("Sorry, I couldn't list your projects.")
+        return True
 
     # ------------------------------------------------------------------
     # Interruptible TTS — speak sentence-by-sentence, listening briefly

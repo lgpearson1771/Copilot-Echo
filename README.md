@@ -49,6 +49,9 @@ Or use `run.bat` instead of `run.ps1`.
 | **"Resume listening"** or wake word while paused | Resumes the listener |
 | **"Hold on a sec" / "Give me more time"** | Extends the conversation window by 30 seconds |
 | **"Stop" / "Let me interrupt" / "Listen up"** | Interrupts TTS playback mid-sentence, says "Go ahead" |
+| **"Start a project called {name}"** | Creates a new project knowledge base |
+| **"Finish / close / archive project {name}"** | Archives the project |
+| **"List my projects"** | Reads out active and archived project names |
 
 ## Knowledge File
 
@@ -78,6 +81,20 @@ Copilot Echo supports a **personal knowledge file** — a plain markdown file wh
 
 4. Restart the app. You'll see `Loaded knowledge file (N chars)` in the startup log.
 
+## Project Knowledge Base
+
+For long-running projects (weeks/months), Copilot Echo can maintain **per-project knowledge bases** that accumulate context over time — work items completed, PR outcomes, design decisions, blockers, and lessons learned.
+
+- **"Start a project called {name}"** → creates a structured project file in `config/projects/active/`
+- Active project files are **auto-injected** into the agent's system prompt alongside your knowledge file
+- The agent **auto-captures** relevant activity (work items resolved, PRs merged, decisions made)
+- **"Finish project {name}"** → archives the project, summarizes key takeaways into your knowledge file
+- Archived projects can still be queried on demand
+
+All project files are gitignored — each developer maintains their own.
+
+See [docs/project_knowledge.md](docs/project_knowledge.md) for the full design, voice commands, lifecycle, and configuration.
+
 ## Configuration
 
 Edit `config/config.yaml`. Key settings:
@@ -95,6 +112,8 @@ Edit `config/config.yaml`. Key settings:
 | `voice.post_tts_cooldown_seconds` | `1.0` | Delay after TTS to avoid self-triggering |
 | `voice.stt_model` | `base` | Whisper model size |
 | `agent.knowledge_file` | `null` | Path to personal knowledge file |
+| `agent.projects_dir` | `config/projects` | Directory for project knowledge bases |
+| `agent.project_max_chars` | `4000` | Max chars per project file before summarization |
 
 To list available audio input devices:
 
@@ -127,6 +146,7 @@ voice/
   audio.py          → Audio device resolution helpers
   devices.py        → CLI tool to list input devices
 config.py           → Dataclass config, YAML loader
+projects.py         → Project knowledge base management (create/archive/list/load)
 ```
 
 ## Roadmap
@@ -140,6 +160,11 @@ config.py           → Dataclass config, YAML loader
 - [x] Copilot SDK agent integration
 - [x] MCP server auto-loading from global CLI config
 - [x] Personal knowledge file for persistent agent context
+- [x] Project knowledge base for long-running projects
 - [ ] "Get to work" autonomous mode
-- [ ] Teams auto-pause integration
+- [ ] Teams/Zoom auto-pause integration
+- [ ] Error handling & resilience hardening
+- [ ] End-to-end testing
 - [ ] Repo edit confirmation flow
+
+See [docs/MVP.md](docs/MVP.md) for the full MVP progress tracker with detailed subtasks.

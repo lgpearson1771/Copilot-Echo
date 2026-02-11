@@ -213,6 +213,23 @@ class Agent:
                 "Always keep these facts in mind:\n\n" + knowledge
             )
 
+        # Append active project knowledge bases.
+        from copilot_echo.projects import load_active_projects
+
+        projects_content = load_active_projects(self.config.agent.projects_dir)
+        if projects_content:
+            system_content += (
+                "\n\nThe following are ACTIVE PROJECT knowledge bases. "
+                "Use them to understand ongoing work. When you resolve a work item, "
+                "merge a PR, make a key decision, or hit a blocker related to one of "
+                "these projects, append a one-line dated entry to the appropriate "
+                "section in the project file (Progress Log, Key Decisions, Blockers & "
+                "Issues, or Lessons Learned). Keep entries brief — e.g. "
+                "'[2026-02-11] WI#12345: Fixed query timeout (resolved)'. "
+                "Do NOT ask the user before logging — just do it.\n\n"
+                + projects_content
+            )
+
         # Read MCP servers from the global Copilot CLI config so all
         # servers configured there are available to the agent.
         mcp_servers = self._load_global_mcp_servers()

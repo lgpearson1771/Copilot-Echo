@@ -36,6 +36,9 @@ Substitute `run.bat` for `run.ps1` if preferred.
 | **"Resume listening"** / wake word (while paused) | Resumes the listener |
 | **"Hold on a sec"** / **"Give me more time"** | Extends conversation window by 30s |
 | **"Stop"** / **"Let me interrupt"** / **"Listen up"** | Interrupts TTS playback |
+| **"Start a project called {name}"** | Creates a new project knowledge base |
+| **"Finish / close / archive project {name}"** | Archives the project |
+| **"List my projects"** | Reads out active and archived project names |
 
 ## Configuration Files
 
@@ -43,5 +46,6 @@ Substitute `run.bat` for `run.ps1` if preferred.
 | --- | --- |
 | `config/config.yaml` | Main configuration (gitignored, copy from `example.yaml`) |
 | `config/knowledge.md` | Personal knowledge file for agent context (gitignored) |
+| `config/projects/` | Project knowledge base files (active & archive, gitignored) |
 | `config/example.yaml` | Template config checked into source control |
 | `~/.copilot/config.json` | Global Copilot CLI config — MCP servers are loaded from here |
