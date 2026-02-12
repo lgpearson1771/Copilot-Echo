@@ -36,6 +36,9 @@ class VoiceConfig:
     stt_model: str = "base"
     stt_device: str = "cpu"
     stt_compute_type: str = "int8"
+    tts_voice: str | None = None
+    tts_rate: int = 200
+    tts_volume: float = 1.0
     auto_pause_on_call: bool = False
     auto_pause_apps: list[str] = field(
         default_factory=lambda: ["ms-teams.exe", "Teams.exe", "Zoom.exe"]

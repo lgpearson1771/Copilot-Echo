@@ -165,6 +165,9 @@ Edit `config/config.yaml`. Key settings:
 | `voice.utterance_end_seconds` | `1.5` | Silence after speech that ends an utterance |
 | `voice.stt_energy_threshold` | `0.01` | RMS energy level to detect speech |
 | `voice.post_tts_cooldown_seconds` | `1.0` | Delay after TTS to avoid self-triggering |
+| `voice.tts_voice` | `null` | Substring match against SAPI5 voice name (e.g. `"David"`) |
+| `voice.tts_rate` | `200` | TTS speech rate in words per minute |
+| `voice.tts_volume` | `1.0` | TTS playback volume (0.0–1.0) |
 | `voice.stt_model` | `base` | Whisper model size |
 | `agent.knowledge_file` | `null` | Path to personal knowledge file |
 | `agent.projects_dir` | `config/projects` | Directory for project knowledge bases |
@@ -183,6 +186,25 @@ To list available audio input devices:
 ```
 
 Set `audio_device` (index) or `audio_device_name` (substring match) to select a mic.
+
+### TTS Voice & Speed
+
+Copilot Echo uses the system default SAPI5 voice by default. To change the voice, speech rate, or volume, add these settings to your `config/config.yaml`:
+
+```yaml
+voice:
+  tts_voice: "David"    # substring match against installed voice name
+  tts_rate: 180          # words per minute (default 200, range 100–300)
+  tts_volume: 0.8        # 0.0–1.0 (default 1.0)
+```
+
+To see which voices are installed on your machine:
+
+```powershell
+./run.ps1 -m copilot_echo.voice.list_voices
+```
+
+Use any substring from the voice name (e.g. `"Zira"`, `"David"`, `"Hazel"`). If the configured name doesn't match any installed voice, the system default is used and a warning is logged.
 
 ### Custom Wake Word Models
 
@@ -215,6 +237,7 @@ voice/
   tts.py            → Text-to-speech (pyttsx3), interruptible sentence-by-sentence speaker
   audio.py          → Audio device resolution helpers
   list_devices.py   → CLI tool to list input devices
+  list_voices.py    → CLI tool to list available TTS voices
 ```
 
 ## Roadmap

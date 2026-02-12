@@ -32,7 +32,11 @@ class VoiceLoop:
                 config.voice.audio_device, config.voice.audio_device_name
             )
             self.stt.audio_device = resolved
-        self.tts = TextToSpeech()
+        self.tts = TextToSpeech(
+            voice=config.voice.tts_voice,
+            rate=config.voice.tts_rate,
+            volume=config.voice.tts_volume,
+        )
         self.wakeword = WakeWordDetector(
             engine=config.voice.wakeword_engine,
             phrase=config.voice.wake_word,

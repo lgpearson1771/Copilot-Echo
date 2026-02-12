@@ -14,6 +14,7 @@ from copilot_echo.voice.tts import (
     INTERRUPT_PHRASES,
     InterruptibleSpeaker,
     TextToSpeech,
+    _resolve_voice,
     speak_error,
 )
 
@@ -75,14 +76,123 @@ class TestTextToSpeech:
             tts.speak("test")
         mock_engine.stop.assert_called_once()
 
-    def test_voice_id_set_on_engine(self):
+    def test_voice_name_resolved_on_engine(self):
+        mock_engine = MagicMock()
+        voice_obj = MagicMock()
+        voice_obj.name = "Microsoft David Desktop"
+        voice_obj.id = "HKEY_david"
+        mock_engine.getProperty.return_value = [voice_obj]
+        with patch("copilot_echo.voice.tts.pyttsx3") as mock_pyttsx3:
+            mock_pyttsx3.init.return_value = mock_engine
+            tts = TextToSpeech(voice="David")
+            tts.speak("Hi")
+        mock_engine.setProperty.assert_any_call("voice", "HKEY_david")
+
+    def test_voice_name_case_insensitive(self):
+        mock_engine = MagicMock()
+        voice_obj = MagicMock()
+        voice_obj.name = "Microsoft Zira Desktop"
+        voice_obj.id = "HKEY_zira"
+        mock_engine.getProperty.return_value = [voice_obj]
+        with patch("copilot_echo.voice.tts.pyttsx3") as mock_pyttsx3:
+            mock_pyttsx3.init.return_value = mock_engine
+            tts = TextToSpeech(voice="zira")
+            tts.speak("Hi")
+        mock_engine.setProperty.assert_any_call("voice", "HKEY_zira")
+
+    def test_voice_name_no_match_logs_warning(self):
+        mock_engine = MagicMock()
+        voice_obj = MagicMock()
+        voice_obj.name = "Microsoft David Desktop"
+        voice_obj.id = "HKEY_david"
+        mock_engine.getProperty.return_value = [voice_obj]
+        with patch("copilot_echo.voice.tts.pyttsx3") as mock_pyttsx3:
+            mock_pyttsx3.init.return_value = mock_engine
+            tts = TextToSpeech(voice="NonExistent")
+            with patch("copilot_echo.voice.tts.logging") as mock_log:
+                tts.speak("Hi")
+            mock_log.warning.assert_called_once()
+            # Should NOT have set a voice property
+            voice_calls = [
+                c for c in mock_engine.setProperty.call_args_list
+                if c.args[0] == "voice"
+            ]
+            assert len(voice_calls) == 0
+
+    def test_rate_applied_to_engine(self):
+        mock_engine = MagicMock()
+        with patch("copilot_echo.voice.tts.pyttsx3") as mock_pyttsx3:
+            mock_pyttsx3.init.return_value = mock_engine
+            tts = TextToSpeech(rate=150)
+            tts.speak("Hi")
+        mock_engine.setProperty.assert_any_call("rate", 150)
+
+    def test_volume_applied_to_engine(self):
+        mock_engine = MagicMock()
+        with patch("copilot_echo.voice.tts.pyttsx3") as mock_pyttsx3:
+            mock_pyttsx3.init.return_value = mock_engine
+            tts = TextToSpeech(volume=0.5)
+            tts.speak("Hi")
+        mock_engine.setProperty.assert_any_call("volume", 0.5)
+
+    def test_volume_clamped_to_range(self):
+        tts_high = TextToSpeech(volume=2.5)
+        assert tts_high._volume == 1.0
+        tts_low = TextToSpeech(volume=-0.5)
+        assert tts_low._volume == 0.0
+
+    def test_default_rate_and_volume(self):
         mock_engine = MagicMock()
         with patch("copilot_echo.voice.tts.pyttsx3") as mock_pyttsx3:
             mock_pyttsx3.init.return_value = mock_engine
             tts = TextToSpeech()
-            tts._voice_id = "some-voice-id"
             tts.speak("Hi")
-        mock_engine.setProperty.assert_called_once_with("voice", "some-voice-id")
+        mock_engine.setProperty.assert_any_call("rate", 200)
+        mock_engine.setProperty.assert_any_call("volume", 1.0)
+
+    def test_no_voice_property_when_none(self):
+        mock_engine = MagicMock()
+        with patch("copilot_echo.voice.tts.pyttsx3") as mock_pyttsx3:
+            mock_pyttsx3.init.return_value = mock_engine
+            tts = TextToSpeech()  # voice=None
+            tts.speak("Hi")
+        voice_calls = [
+            c for c in mock_engine.setProperty.call_args_list
+            if c.args[0] == "voice"
+        ]
+        assert len(voice_calls) == 0
+
+
+# ------------------------------------------------------------------
+# _resolve_voice helper
+# ------------------------------------------------------------------
+
+class TestResolveVoice:
+    def test_match_found(self):
+        engine = MagicMock()
+        v1 = MagicMock(); v1.name = "Microsoft David Desktop"; v1.id = "id_david"
+        v2 = MagicMock(); v2.name = "Microsoft Zira Desktop"; v2.id = "id_zira"
+        engine.getProperty.return_value = [v1, v2]
+        assert _resolve_voice(engine, "David") == "id_david"
+
+    def test_no_match(self):
+        engine = MagicMock()
+        v1 = MagicMock(); v1.name = "Microsoft David Desktop"; v1.id = "id_david"
+        engine.getProperty.return_value = [v1]
+        assert _resolve_voice(engine, "Cortana") is None
+
+    def test_case_insensitive(self):
+        engine = MagicMock()
+        v1 = MagicMock(); v1.name = "Microsoft Zira Desktop"; v1.id = "id_zira"
+        engine.getProperty.return_value = [v1]
+        assert _resolve_voice(engine, "zIrA") == "id_zira"
+
+    def test_first_match_returned(self):
+        engine = MagicMock()
+        v1 = MagicMock(); v1.name = "Voice Alpha"; v1.id = "id_a"
+        v2 = MagicMock(); v2.name = "Voice Alpha Beta"; v2.id = "id_b"
+        engine.getProperty.return_value = [v1, v2]
+        assert _resolve_voice(engine, "Alpha") == "id_a"
 
 
 # ------------------------------------------------------------------

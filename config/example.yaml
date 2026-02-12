@@ -37,6 +37,12 @@ voice:
   stt_device: "cpu"        # cpu or cuda
   stt_compute_type: "int8" # int8, float16, float32
 
+  # TTS output settings
+  # Run 'python -m copilot_echo.voice.list_voices' to see available voices.
+  # tts_voice: null          # substring match against SAPI5 voice name (e.g. "David", "Zira")
+  # tts_rate: 200            # words per minute (100–300)
+  # tts_volume: 1.0          # 0.0–1.0
+
   # Auto-pause: pause the listener when a configured app is in an active call.
   # Detects both render (speaker) and capture (mic) audio sessions via WASAPI
   # so muting during a call does not cause a false resume.

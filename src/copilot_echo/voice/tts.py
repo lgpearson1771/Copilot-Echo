@@ -24,14 +24,42 @@ def speak_error(tts: "TextToSpeech", message: str) -> None:
             logging.error("speak_error: beep fallback also failed")
 
 
+def _resolve_voice(engine: pyttsx3.Engine, name: str) -> str | None:
+    """Find the first installed voice whose name contains *name* (case-insensitive).
+
+    Returns the matching voice ID, or ``None`` if no match is found.
+    """
+    for voice in engine.getProperty("voices"):
+        if name.lower() in voice.name.lower():
+            return voice.id
+    return None
+
+
 class TextToSpeech:
-    def __init__(self) -> None:
-        self._voice_id: str | None = None
+    def __init__(
+        self,
+        voice: str | None = None,
+        rate: int = 200,
+        volume: float = 1.0,
+    ) -> None:
+        self._voice_name = voice
+        self._rate = rate
+        self._volume = max(0.0, min(1.0, volume))
 
     def _build_engine(self) -> pyttsx3.Engine:
         engine = pyttsx3.init()
-        if self._voice_id:
-            engine.setProperty("voice", self._voice_id)
+        if self._voice_name:
+            resolved = _resolve_voice(engine, self._voice_name)
+            if resolved:
+                engine.setProperty("voice", resolved)
+            else:
+                logging.warning(
+                    "TTS voice '%s' not found — using system default. "
+                    "Run 'python -m copilot_echo.voice.list_voices' to see available voices.",
+                    self._voice_name,
+                )
+        engine.setProperty("rate", self._rate)
+        engine.setProperty("volume", self._volume)
         return engine
 
     def speak(self, text: str) -> None:

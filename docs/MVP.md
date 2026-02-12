@@ -132,13 +132,26 @@ What needs to be done before Copilot Echo is ready for a full launch.
 - [x] Unit tests for Call Detector (audio session detection, WASAPI enumeration, polling loop) — 22 tests, 80% coverage
 - [x] Unit tests for Audio (resolve_input_device, list_input_devices) — 9 tests, 100% coverage
 
+### TTS Voice / Speed Configuration — DONE
+
+> Configurable TTS voice selection, speech rate, and volume so users can
+> pick their preferred SAPI5 voice and tune playback speed.
+
+- [x] Config: `voice.tts_voice` — substring match against installed SAPI5 voice names
+- [x] Config: `voice.tts_rate` — words per minute (default 200)
+- [x] Config: `voice.tts_volume` — 0.0–1.0 playback volume (default 1.0)
+- [x] Voice resolution in `TextToSpeech._build_engine()` with fallback + warning
+- [x] `list_voices.py` CLI helper (`python -m copilot_echo.voice.list_voices`)
+- [x] Config wired through `VoiceLoop` → `TextToSpeech`
+- [x] Unit tests for voice resolution, rate/volume application, clamping, defaults
+- [x] example.yaml and README updated
+
 ---
 
 ## Post-MVP / Nice to Have
 
 - [ ] Repo edit confirmation flow (agent proposes edits, user confirms by voice)
 - [ ] Custom wake word model training (currently limited to built-in phrases)
-- [ ] TTS voice selection / speed configuration
 - [ ] Conversation history / session logging
 - [ ] Multi-language STT support
 - [ ] GPU acceleration for STT (CUDA)
