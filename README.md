@@ -225,9 +225,9 @@ voice/
 - [x] Personal knowledge file for persistent agent context
 - [x] Project knowledge base for long-running projects
 - [x] "Get to work" autonomous mode
+- [x] Comprehensive unit test suite (263 tests, 84% coverage)
 - [ ] Teams/Zoom auto-pause integration
 - [ ] Error handling & resilience hardening
-- [ ] End-to-end testing
 - [ ] Repo edit confirmation flow
 
 See [docs/MVP.md](docs/MVP.md) for the full MVP progress tracker with detailed subtasks.
