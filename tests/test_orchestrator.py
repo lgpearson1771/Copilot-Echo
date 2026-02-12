@@ -173,6 +173,15 @@ class TestLifecycle:
             orch.start_agent()
         assert orch.last_error == "Agent failed to start"
 
+    def test_start_agent_failure_sets_error_state(self, fake_config):
+        with patch("copilot_echo.orchestrator.Agent") as MockAgent:
+            mock_agent = MagicMock()
+            mock_agent.start.side_effect = RuntimeError("Failed")
+            MockAgent.return_value = mock_agent
+            orch = Orchestrator(fake_config)
+            orch.start_agent()
+        assert orch.state == State.ERROR
+
     def test_stop_agent_calls_agent_stop(self, mock_orchestrator):
         mock_orchestrator.stop_agent()
         mock_orchestrator.agent.stop.assert_called_once()

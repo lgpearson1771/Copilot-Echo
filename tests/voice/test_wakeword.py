@@ -9,6 +9,8 @@ from unittest.mock import MagicMock, patch
 import numpy as np
 import pytest
 
+from copilot_echo.errors import DeviceDisconnectedError
+
 
 # ------------------------------------------------------------------
 # WakeWordDetector — STT engine
@@ -99,6 +101,41 @@ class TestWakeWordSTT:
             # listen_until_detected dispatches to _listen_openwakeword
             result = detector.listen_until_detected(stop_event)
             assert result is False
+
+
+class TestOpenWakeWordDeviceError:
+    def test_port_audio_error_raises_device_disconnected(self, mock_stt):
+        with patch("copilot_echo.voice.wakeword.resolve_input_device", return_value=None), \
+             patch("copilot_echo.voice.wakeword.sd") as mock_sd:
+            PortAudioError = type("PortAudioError", (Exception,), {})
+            mock_sd.PortAudioError = PortAudioError
+            mock_sd.InputStream.side_effect = PortAudioError("device gone")
+
+            from copilot_echo.voice.wakeword import WakeWordDetector
+
+            detector = WakeWordDetector(
+                engine="stt",
+                phrase="hey jarvis",
+                stt=mock_stt,
+                listen_seconds=1.0,
+                sample_rate=16000,
+                audio_device=None,
+                audio_device_name=None,
+                inference_framework="tflite",
+                wakeword_models=[],
+                threshold=0.6,
+                chunk_size=1280,
+                holdoff_seconds=1.0,
+                vad_threshold=0.0,
+                speex_noise_suppression=False,
+            )
+            detector.engine = "openwakeword"
+            detector._model = MagicMock()
+
+            stop_event = threading.Event()
+
+            with pytest.raises(DeviceDisconnectedError, match="device gone"):
+                detector._listen_openwakeword(stop_event)
 
 
 # ------------------------------------------------------------------

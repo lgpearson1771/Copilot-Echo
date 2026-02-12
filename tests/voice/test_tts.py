@@ -14,7 +14,31 @@ from copilot_echo.voice.tts import (
     INTERRUPT_PHRASES,
     InterruptibleSpeaker,
     TextToSpeech,
+    speak_error,
 )
+
+
+# ------------------------------------------------------------------
+# speak_error helper
+# ------------------------------------------------------------------
+
+class TestSpeakError:
+    def test_speaks_via_tts(self, mock_tts):
+        speak_error(mock_tts, "Something broke")
+        mock_tts.speak.assert_called_once_with("Something broke")
+
+    def test_fallback_to_beep_on_tts_failure(self, mock_tts):
+        mock_tts.speak.side_effect = RuntimeError("TTS crashed")
+        with patch("copilot_echo.voice.tts.winsound") as mock_ws:
+            speak_error(mock_tts, "Error message")
+        mock_ws.Beep.assert_called_once_with(1000, 400)
+
+    def test_silent_if_both_fail(self, mock_tts):
+        mock_tts.speak.side_effect = RuntimeError("TTS crashed")
+        with patch("copilot_echo.voice.tts.winsound") as mock_ws:
+            mock_ws.Beep.side_effect = RuntimeError("no speaker")
+            # Should not raise
+            speak_error(mock_tts, "Error message")
 
 
 # ------------------------------------------------------------------

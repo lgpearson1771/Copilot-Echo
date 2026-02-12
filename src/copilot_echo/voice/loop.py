@@ -5,11 +5,12 @@ import time
 from collections.abc import Callable
 
 from copilot_echo.config import Config
+from copilot_echo.errors import DeviceDisconnectedError
 from copilot_echo.orchestrator import Orchestrator, State
 from copilot_echo.voice.autonomous import AutonomousRunner
 from copilot_echo.voice.commands import VoiceCommandHandler
 from copilot_echo.voice.stt import SpeechToText
-from copilot_echo.voice.tts import InterruptibleSpeaker, TextToSpeech
+from copilot_echo.voice.tts import InterruptibleSpeaker, TextToSpeech, speak_error
 from copilot_echo.voice.wakeword import WakeWordDetector
 
 
@@ -65,34 +66,115 @@ class VoiceLoop:
         )
 
     def run(self, status_callback: Callable[[str], None], stop_event) -> None:
+        # Notify user if the agent failed during startup
+        if self.orchestrator.last_error:
+            speak_error(
+                self.tts,
+                "Warning: I couldn't connect to the Copilot agent. "
+                "Some features may not work.",
+            )
+
         while not stop_event.is_set():
-            if self.orchestrator.state == State.PAUSED:
-                # Auto-paused by call detector: silence the mic completely.
-                if self.orchestrator.is_auto_paused:
-                    status_callback("Paused (Call)")
-                    time.sleep(0.5)
-                    continue
+            try:
+                self._run_iteration(status_callback, stop_event)
+            except DeviceDisconnectedError:
+                self._handle_device_disconnect(status_callback, stop_event)
+            except Exception:
+                logging.exception("Voice loop encountered an unexpected error")
+                speak_error(
+                    self.tts,
+                    "Something went wrong with the voice system. Restarting.",
+                )
+                # Reset orchestrator to a safe state before retrying
+                if self.orchestrator.state not in (State.PAUSED, State.IDLE):
+                    self.orchestrator.state = State.IDLE
+                time.sleep(2)
 
-                status_callback("Paused")
-                text = self.stt.transcribe_once(self.config.voice.wake_listen_seconds)
-                normalized = text.lower().strip() if text else ""
-                logging.info("Paused transcript: %s", text if text else "<empty>")
-                wake_phrase = self.config.voice.wake_word.lower().strip()
-                if "resume listening" in normalized or (wake_phrase and wake_phrase in normalized):
-                    logging.info("Resume listening command detected")
-                    self.tts.speak("Resuming listening.")
-                    self.orchestrator.resume()
-                else:
-                    time.sleep(0.5)
-                continue
+    # ------------------------------------------------------------------
+    # Single iteration of the main loop (extracted for error handling)
+    # ------------------------------------------------------------------
 
-            status_callback("Idle")
-            if not self.wakeword.listen_until_detected(stop_event):
-                continue
+    def _run_iteration(
+        self, status_callback: Callable[[str], None], stop_event
+    ) -> None:
+        if self.orchestrator.state == State.PAUSED:
+            # Auto-paused by call detector: silence the mic completely.
+            if self.orchestrator.is_auto_paused:
+                status_callback("Paused (Call)")
+                time.sleep(0.5)
+                return
 
-            self.orchestrator.on_wake_word()
-            logging.info("Wake word detected")
-            self._conversation_loop(status_callback, stop_event)
+            status_callback("Paused")
+            text = self.stt.transcribe_once(self.config.voice.wake_listen_seconds)
+            normalized = text.lower().strip() if text else ""
+            logging.info("Paused transcript: %s", text if text else "<empty>")
+            wake_phrase = self.config.voice.wake_word.lower().strip()
+            if "resume listening" in normalized or (wake_phrase and wake_phrase in normalized):
+                logging.info("Resume listening command detected")
+                self.tts.speak("Resuming listening.")
+                self.orchestrator.resume()
+            else:
+                time.sleep(0.5)
+            return
+
+        status_callback("Idle")
+        if not self.wakeword.listen_until_detected(stop_event):
+            return
+
+        self.orchestrator.on_wake_word()
+        logging.info("Wake word detected")
+        self._conversation_loop(status_callback, stop_event)
+
+    # ------------------------------------------------------------------
+    # Device recovery
+    # ------------------------------------------------------------------
+
+    def _handle_device_disconnect(
+        self, status_callback: Callable[[str], None], stop_event
+    ) -> None:
+        """Poll until the audio device is available again, then resume."""
+        logging.warning("Audio device disconnected")
+        speak_error(
+            self.tts, "Microphone disconnected. I'll try to reconnect."
+        )
+        status_callback("No Mic")
+
+        # Make sure we're in a clean state
+        if self.orchestrator.state == State.AUTONOMOUS:
+            self.orchestrator.stop_autonomous()
+        elif self.orchestrator.state not in (State.PAUSED, State.IDLE):
+            self.orchestrator.state = State.IDLE
+
+        import sounddevice as sd
+
+        from copilot_echo.voice.audio import resolve_input_device
+
+        while not stop_event.is_set():
+            time.sleep(3)
+            try:
+                new_device = resolve_input_device(
+                    self.config.voice.audio_device,
+                    self.config.voice.audio_device_name,
+                )
+                # Validate the device by briefly opening a stream
+                test = sd.InputStream(
+                    device=new_device,
+                    samplerate=self.config.voice.sample_rate,
+                    channels=1,
+                    dtype="float32",
+                )
+                test.start()
+                test.stop()
+                test.close()
+
+                # Success — update both consumers
+                self.stt.audio_device = new_device
+                self.wakeword.audio_device = new_device
+                logging.info("Audio device reconnected (index=%s)", new_device)
+                speak_error(self.tts, "Microphone reconnected.")
+                return
+            except Exception:
+                logging.debug("Device still unavailable, retrying…")
 
     def _conversation_loop(
         self, status_callback: Callable[[str], None], stop_event

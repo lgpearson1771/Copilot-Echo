@@ -3,8 +3,25 @@ from __future__ import annotations
 import logging
 import re
 import time
+import winsound
 
 import pyttsx3
+
+
+def speak_error(tts: "TextToSpeech", message: str) -> None:
+    """Attempt to speak *message* via TTS; fall back to a system beep.
+
+    This is the last-resort notification channel — if TTS itself is
+    broken we still want the user to know *something* happened.
+    """
+    try:
+        tts.speak(message)
+    except Exception:
+        logging.exception("speak_error: TTS failed, falling back to beep")
+        try:
+            winsound.Beep(1000, 400)
+        except Exception:
+            logging.error("speak_error: beep fallback also failed")
 
 
 class TextToSpeech:

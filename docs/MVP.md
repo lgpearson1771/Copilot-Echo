@@ -76,10 +76,15 @@ What needs to be done before Copilot Echo is ready for a full launch.
 - [x] Ad-hoc "get to work on {task}" for one-off autonomous tasks
 - [x] Config: `agent.autonomous_routines`, `autonomous_max_steps`, `autonomous_max_minutes`
 
-### Teams Auto-Pause — DONE
+### Teams Auto-Pause — NEEDS REVIEW
 
 > Automatically pause the listener when a Teams/Zoom call is active to avoid
 > picking up meeting audio, and resume when the call ends.
+
+> **⚠️ Review required before MVP launch:** Manual testing (2026-02-12) showed
+> the auto-pause/auto-resume behavior did not work as expected. Needs
+> investigation and fixing in a quieter environment. Do not ship until
+> verified end-to-end.
 
 - [x] Detect active Teams/Zoom call (audio session detection via WASAPI — render + capture endpoints)
 - [x] Auto-pause orchestrator when call detected
@@ -87,37 +92,43 @@ What needs to be done before Copilot Echo is ready for a full launch.
 - [x] Visual notification on pause/resume (tray shows "Paused (Call)" status)
 - [x] Config: `voice.auto_pause_on_call` toggle
 - [x] Config: `voice.auto_pause_apps` list (default: Teams, Zoom)
+- [ ] **Manual testing validation** — verify auto-pause triggers on call start and auto-resume triggers on call end
 
-### Error Handling & Resilience
+### Error Handling & Resilience — DONE
 
-- [ ] Graceful recovery when Copilot CLI process crashes mid-session
-- [ ] Retry logic for transient MCP server failures
-- [ ] User-facing TTS error messages instead of silent failures
-- [ ] Handle microphone disconnection / device change gracefully
+> Hardening pass across all modules: crash detection & auto-recovery for the
+> Copilot CLI agent, MCP server retry logic, TTS-based error notifications,
+> and automatic microphone reconnection on device disconnect.
+
+- [x] Graceful recovery when Copilot CLI process crashes mid-session
+- [x] Retry logic for transient MCP server failures
+- [x] User-facing TTS error messages instead of silent failures
+- [x] Handle microphone disconnection / device change gracefully
 
 ### Testing & Polish — DONE
 
 > Comprehensive pytest-based unit test suite covering all modules.
-> 294 tests, 84% overall coverage. All hardware dependencies mocked
+> 331 tests, 84% overall coverage. All hardware dependencies mocked
 > (audio, TTS, STT, Copilot SDK, pystray, pynput, openwakeword).
 > Test infrastructure: pytest + pytest-asyncio + pytest-cov.
 
-- [x] Unit tests for Orchestrator (state transitions, send_to_agent, cancel, autonomous lifecycle, auto-pause) — 29 tests, 100% coverage
-- [x] Unit tests for Agent (init, send, cancel, async startup/shutdown, tool logging) — 17 tests, 68% coverage
+- [x] Unit tests for Orchestrator (state transitions, send_to_agent, cancel, autonomous lifecycle, auto-pause, error state) — 30 tests, 100% coverage
+- [x] Unit tests for Agent (init, send, cancel, async startup/shutdown, tool logging, crash detection, crash recovery, reinitialize, startup retry) — 31 tests, 68% coverage
 - [x] Unit tests for Config (dataclass defaults, YAML loading, autonomous routines) — 13 tests, 92% coverage
-- [x] Unit tests for MCP config (server loading, sanitization, env merging, project MCP) — 14 tests, 100% coverage
+- [x] Unit tests for MCP config (server loading, sanitization, env merging, project MCP, transient retry) — 15 tests, 100% coverage
 - [x] Unit tests for Projects (slugify, create, archive, list, load, append, replace, read) — 39 tests, 93% coverage
 - [x] Unit tests for Project MCP tools (list, get, append, compact, file chars) — 11 tests, 92% coverage
 - [x] Unit tests for Prompt Builder (system prompt, knowledge loading, session config, permissions) — 15 tests, 94% coverage
 - [x] Unit tests for Paths — 3 tests, 100% coverage
 - [x] Unit tests for Logging — 3 tests, 100% coverage
+- [x] Unit tests for Errors (AgentCrashedError, DeviceDisconnectedError) — 6 tests, 100% coverage
 - [x] Unit tests for Tray (icon, title, callbacks, caps lock triple-tap) — 9 tests, 53% coverage
-- [x] Unit tests for Voice Loop (paused state, auto-pause, conversation loop, commands, autonomous, agent replies) — 11 tests, 89% coverage
+- [x] Unit tests for Voice Loop (paused state, auto-pause, conversation loop, commands, autonomous, agent replies, startup error notification, device recovery, crash handler) — 18 tests, 89% coverage
 - [x] Unit tests for Voice Commands (pattern matching, execution, name extraction, regex) — 36 tests, 86% coverage
-- [x] Unit tests for Autonomous Mode (strip_marker, interrupt phrases, triggers, run loop, interrupt watcher) — 31 tests, 91% coverage
-- [x] Unit tests for TTS (speak, interruptible, sentence splitting, interrupt phrases) — 13 tests, 93% coverage
-- [x] Unit tests for STT (init, transcribe_once, transcribe_until_silence) — 6 tests, 75% coverage
-- [x] Unit tests for Wake Word Detector (STT engine, openwakeword dispatch, _is_triggered) — 13 tests, 71% coverage
+- [x] Unit tests for Autonomous Mode (strip_marker, interrupt phrases, triggers, run loop, interrupt watcher, cleanup safety net) — 33 tests, 91% coverage
+- [x] Unit tests for TTS (speak, speak_error, interruptible, sentence splitting, interrupt phrases) — 16 tests, 93% coverage
+- [x] Unit tests for STT (init, transcribe_once, transcribe_until_silence, device disconnect) — 8 tests, 75% coverage
+- [x] Unit tests for Wake Word Detector (STT engine, openwakeword dispatch, _is_triggered, device disconnect) — 14 tests, 71% coverage
 - [x] Unit tests for Call Detector (audio session detection, WASAPI enumeration, polling loop) — 22 tests, 80% coverage
 - [x] Unit tests for Audio (resolve_input_device, list_input_devices) — 9 tests, 100% coverage
 

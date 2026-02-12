@@ -8,7 +8,13 @@ import logging
 import threading
 
 from copilot_echo.config import Config
+from copilot_echo.errors import AgentCrashedError
 from copilot_echo.prompt_builder import build_session_config
+
+# Exception types that indicate the CLI process has died rather than a
+# transient application-level error.  ConnectionError covers
+# BrokenPipeError, ConnectionResetError, etc.
+_CRASH_EXCEPTIONS = (ConnectionError, EOFError)
 
 # Lazily import copilot SDK so the module can be loaded even if the SDK
 # has import-time side effects.
@@ -78,6 +84,9 @@ class Agent:
         """Send a user message and wait for the assistant's response.
 
         Returns the assistant reply text, or an error string on failure.
+        If the CLI process appears to have crashed, attempts automatic
+        recovery (up to 2 reinitialisation attempts) and retries the
+        original prompt once on success.
         """
         if not self._started or not self._loop:
             return "Agent is not running."
@@ -89,6 +98,28 @@ class Agent:
         except concurrent.futures.CancelledError:
             logging.info("Agent request was cancelled")
             return ""
+        except AgentCrashedError:
+            logging.warning("Agent appears to have crashed, attempting recovery…")
+            for attempt in range(1, 3):
+                if self.reinitialize():
+                    logging.info("Agent recovered (attempt %d), retrying request", attempt)
+                    retry = asyncio.run_coroutine_threadsafe(
+                        self._send(prompt, timeout), self._loop
+                    )
+                    try:
+                        return retry.result(timeout=timeout + 5)
+                    except AgentCrashedError:
+                        logging.error("Agent crashed again after recovery (attempt %d)", attempt)
+                        continue
+                    except Exception as exc:
+                        logging.exception("Retry after recovery failed")
+                        return f"Sorry, something went wrong after recovery: {exc}"
+                else:
+                    logging.error("Agent recovery failed (attempt %d)", attempt)
+            return (
+                "The Copilot agent crashed and I couldn't restart it. "
+                "Please restart the app."
+            )
         except Exception as exc:
             logging.exception("Agent send failed")
             return f"Sorry, something went wrong: {exc}"
@@ -99,6 +130,25 @@ class Agent:
         if task and self._loop:
             self._loop.call_soon_threadsafe(task.cancel)
             logging.info("Agent request cancelled")
+
+    def reinitialize(self) -> bool:
+        """Shutdown and restart the agent session after a crash.
+
+        Returns ``True`` if the agent is running again, ``False`` on
+        failure.  Safe to call from any thread.
+        """
+        if not self._loop:
+            return False
+        logging.info("Reinitializing Copilot agent…")
+        future = asyncio.run_coroutine_threadsafe(
+            self._reinitialize(), self._loop
+        )
+        try:
+            future.result(timeout=70)  # _startup may take up to 60 s
+            return self._started
+        except Exception:
+            logging.exception("Agent reinitialization failed")
+            return False
 
     # ------------------------------------------------------------------
     # Internal async helpers
@@ -122,14 +172,43 @@ class Agent:
                 }
             )
             await self._client.start()
-            self._session = await self._client.create_session(
-                build_session_config(self.config)
-            )
+
+            # Retry session creation with exponential back-off so
+            # transient MCP server failures don't prevent startup.
+            session_config = build_session_config(self.config)
+            last_exc: Exception | None = None
+            for attempt in range(1, 4):  # up to 3 attempts
+                try:
+                    self._session = await self._client.create_session(
+                        session_config
+                    )
+                    break
+                except Exception as exc:
+                    last_exc = exc
+                    if attempt < 3:
+                        delay = 2 ** attempt  # 2 s, 4 s
+                        logging.warning(
+                            "Session creation failed (attempt %d/3), "
+                            "retrying in %ds: %s",
+                            attempt,
+                            delay,
+                            exc,
+                        )
+                        await asyncio.sleep(delay)
+            else:
+                raise last_exc  # type: ignore[misc]
+
             self._started = True
             await self._log_available_tools()
         except Exception:
             logging.exception("Failed to start Copilot agent")
             self._started = False
+
+    async def _reinitialize(self) -> None:
+        """Tear down and re-create the client + session."""
+        await self._shutdown()
+        self._started = False
+        await self._startup()
 
     async def _log_available_tools(self) -> None:
         """Log the tools that the session actually has access to."""
@@ -176,6 +255,10 @@ class Agent:
         except asyncio.CancelledError:
             logging.info("Agent send coroutine cancelled")
             raise
+        except _CRASH_EXCEPTIONS as exc:
+            logging.error("Agent CLI process appears to have crashed: %s", exc)
+            self._started = False
+            raise AgentCrashedError(str(exc)) from exc
         except Exception as exc:
             logging.exception("send_and_wait failed")
             return f"Sorry, something went wrong: {exc}"

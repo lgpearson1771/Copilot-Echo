@@ -7,6 +7,8 @@ from unittest.mock import MagicMock, patch, call
 import numpy as np
 import pytest
 
+from copilot_echo.errors import DeviceDisconnectedError
+
 
 class TestSpeechToTextInit:
     def test_stores_config(self):
@@ -86,6 +88,21 @@ class TestTranscribeOnce:
 
         assert result == "hello world"
 
+    def test_port_audio_error_raises_device_disconnected(self):
+        mock_model = MagicMock()
+
+        with patch("copilot_echo.voice.stt.WhisperModel", return_value=mock_model), \
+             patch("copilot_echo.voice.stt.resolve_input_device", return_value=None), \
+             patch("copilot_echo.voice.stt.sd") as mock_sd:
+            mock_sd.PortAudioError = type("PortAudioError", (Exception,), {})
+            mock_sd.rec.side_effect = mock_sd.PortAudioError("device unavailable")
+            from copilot_echo.voice.stt import SpeechToText
+
+            stt = SpeechToText("tiny", "cpu", "int8", 16000, None)
+
+            with pytest.raises(DeviceDisconnectedError, match="device unavailable"):
+                stt.transcribe_once(1.0)
+
 
 class TestTranscribeUntilSilence:
     def test_no_speech_returns_empty(self):
@@ -129,6 +146,7 @@ class TestTranscribeUntilSilence:
         with patch("copilot_echo.voice.stt.WhisperModel", return_value=mock_model), \
              patch("copilot_echo.voice.stt.resolve_input_device", return_value=None), \
              patch("copilot_echo.voice.stt.sd") as mock_sd:
+            mock_sd.PortAudioError = type("PortAudioError", (Exception,), {})
             mock_sd.InputStream.side_effect = RuntimeError("device error")
             from copilot_echo.voice.stt import SpeechToText
 
@@ -136,3 +154,19 @@ class TestTranscribeUntilSilence:
             result = stt.transcribe_until_silence()
 
         assert result == ""
+
+    def test_port_audio_error_raises_device_disconnected(self):
+        mock_model = MagicMock()
+
+        with patch("copilot_echo.voice.stt.WhisperModel", return_value=mock_model), \
+             patch("copilot_echo.voice.stt.resolve_input_device", return_value=None), \
+             patch("copilot_echo.voice.stt.sd") as mock_sd:
+            PortAudioError = type("PortAudioError", (Exception,), {})
+            mock_sd.PortAudioError = PortAudioError
+            mock_sd.InputStream.side_effect = PortAudioError("device gone")
+            from copilot_echo.voice.stt import SpeechToText
+
+            stt = SpeechToText("tiny", "cpu", "int8", 16000, None)
+
+            with pytest.raises(DeviceDisconnectedError, match="device gone"):
+                stt.transcribe_until_silence()

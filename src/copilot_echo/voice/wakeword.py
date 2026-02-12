@@ -7,6 +7,7 @@ from typing import Iterable
 import numpy as np
 import sounddevice as sd
 
+from copilot_echo.errors import DeviceDisconnectedError
 from copilot_echo.voice.audio import resolve_input_device
 from copilot_echo.voice.stt import SpeechToText
 
@@ -82,23 +83,27 @@ class WakeWordDetector:
             logging.error("Openwakeword model not initialized")
             return False
 
-        with sd.InputStream(
-            samplerate=self.sample_rate,
-            channels=1,
-            dtype="int16",
-            blocksize=self.chunk_size,
-            device=self.audio_device,
-        ) as stream:
-            while not stop_event.is_set():
-                audio, _ = stream.read(self.chunk_size)
-                samples = np.squeeze(audio)
-                if samples.size == 0:
-                    continue
+        try:
+            with sd.InputStream(
+                samplerate=self.sample_rate,
+                channels=1,
+                dtype="int16",
+                blocksize=self.chunk_size,
+                device=self.audio_device,
+            ) as stream:
+                while not stop_event.is_set():
+                    audio, _ = stream.read(self.chunk_size)
+                    samples = np.squeeze(audio)
+                    if samples.size == 0:
+                        continue
 
-                predictions = self._model.predict(samples)
-                if self._is_triggered(predictions):
-                    logging.info("Wake word detected (openwakeword)")
-                    return True
+                    predictions = self._model.predict(samples)
+                    if self._is_triggered(predictions):
+                        logging.info("Wake word detected (openwakeword)")
+                        return True
+        except sd.PortAudioError as exc:
+            logging.error("Audio device error during wake word detection: %s", exc)
+            raise DeviceDisconnectedError(str(exc)) from exc
 
         return False
 

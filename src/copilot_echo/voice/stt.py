@@ -7,6 +7,7 @@ import numpy as np
 import sounddevice as sd
 from faster_whisper import WhisperModel
 
+from copilot_echo.errors import DeviceDisconnectedError
 from copilot_echo.voice.audio import resolve_input_device
 
 
@@ -26,14 +27,18 @@ class SpeechToText:
     def transcribe_once(self, duration_sec: float) -> str:
         """Record for a fixed duration and transcribe.  Used for simple
         wake-word / resume-listening checks where VAD isn't needed."""
-        audio = sd.rec(
-            int(duration_sec * self.sample_rate),
-            samplerate=self.sample_rate,
-            channels=1,
-            dtype="float32",
-            device=self.audio_device,
-        )
-        sd.wait()
+        try:
+            audio = sd.rec(
+                int(duration_sec * self.sample_rate),
+                samplerate=self.sample_rate,
+                channels=1,
+                dtype="float32",
+                device=self.audio_device,
+            )
+            sd.wait()
+        except sd.PortAudioError as exc:
+            logging.error("Audio device error during transcription: %s", exc)
+            raise DeviceDisconnectedError(str(exc)) from exc
 
         samples = np.squeeze(audio)
         segments, _ = self.model.transcribe(samples, language="en", vad_filter=True)
@@ -106,6 +111,9 @@ class SpeechToText:
                                 "No speech detected for %.1fs", silence_duration
                             )
                             return ""
+        except sd.PortAudioError as exc:
+            logging.error("Audio device error during VAD recording: %s", exc)
+            raise DeviceDisconnectedError(str(exc)) from exc
         except Exception:
             logging.exception("Error during VAD recording")
             return ""

@@ -8,6 +8,8 @@ from unittest.mock import MagicMock, patch, call
 
 import pytest
 
+from copilot_echo.errors import DeviceDisconnectedError
+from copilot_echo.orchestrator import State
 from copilot_echo.voice.autonomous import AutonomousRunner, _AD_HOC_PATTERN
 from copilot_echo.voice.tts import INTERRUPT_PHRASES
 
@@ -297,3 +299,50 @@ class TestInterruptWatcher:
         watcher.join(timeout=2)
 
         assert not watcher.is_alive()
+
+
+# ------------------------------------------------------------------
+# Exception cleanup safety net
+# ------------------------------------------------------------------
+
+class TestCleanupSafetyNet:
+    def test_device_disconnect_during_run_cleans_up(
+        self, fake_config, mock_orchestrator, mock_stt, mock_tts
+    ):
+        speak_fn = MagicMock(return_value=False)
+        runner = AutonomousRunner(
+            fake_config, mock_orchestrator, mock_stt, mock_tts, speak_fn
+        )
+
+        # transcribe_once raises DeviceDisconnectedError on pre-step check
+        mock_stt.transcribe_once.side_effect = DeviceDisconnectedError("mic gone")
+        status_cb = MagicMock()
+        stop_event = threading.Event()
+
+        with pytest.raises(DeviceDisconnectedError):
+            runner._run("test task", 5, 10, status_cb, stop_event)
+
+        # Cleanup should have happened
+        assert mock_orchestrator.state != State.AUTONOMOUS
+
+    def test_unexpected_error_cleans_up(
+        self, fake_config, mock_orchestrator, mock_stt, mock_tts
+    ):
+        speak_fn = MagicMock(return_value=False)
+        runner = AutonomousRunner(
+            fake_config, mock_orchestrator, mock_stt, mock_tts, speak_fn
+        )
+
+        # Pre-step transcribe_once returns empty, agent send raises
+        mock_stt.transcribe_once.return_value = ""
+        mock_orchestrator.agent.send.side_effect = RuntimeError("unexpected")
+        # send_to_agent catches the exception and returns error string,
+        # so we need to make the interruptible speak raise instead
+        speak_fn.side_effect = RuntimeError("speaker crash")
+        status_cb = MagicMock()
+        stop_event = threading.Event()
+
+        with pytest.raises(RuntimeError, match="speaker crash"):
+            runner._run("test task", 5, 10, status_cb, stop_event)
+
+        assert mock_orchestrator.state != State.AUTONOMOUS

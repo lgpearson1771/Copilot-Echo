@@ -6,33 +6,49 @@ import json
 import logging
 import os
 import sys
+import time
 
 from copilot_echo.config import Config
 from copilot_echo.paths import project_root
 
 
 def load_global_mcp_servers() -> dict:
-    """Load MCP server definitions from the global Copilot CLI config."""
+    """Load MCP server definitions from the global Copilot CLI config.
+
+    Retries once on transient read errors (e.g. the file is locked by
+    another process writing to it).
+    """
     config_path = os.path.expanduser("~/.copilot/config.json")
     if not os.path.exists(config_path):
         logging.warning("Global Copilot CLI config not found at %s", config_path)
         return {}
 
-    try:
-        with open(config_path, "r", encoding="utf-8") as f:
-            data = json.load(f)
-        servers = data.get("mcp_servers", {})
-        if servers:
-            servers = _sanitize_servers(servers)
-            logging.info(
-                "Loaded %d MCP server(s) from global config: %s",
-                len(servers),
-                ", ".join(servers.keys()),
-            )
-        return servers
-    except Exception:
-        logging.exception("Failed to read global Copilot CLI config")
-        return {}
+    last_exc: Exception | None = None
+    for attempt in range(1, 3):  # up to 2 attempts
+        try:
+            with open(config_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            servers = data.get("mcp_servers", {})
+            if servers:
+                servers = _sanitize_servers(servers)
+                logging.info(
+                    "Loaded %d MCP server(s) from global config: %s",
+                    len(servers),
+                    ", ".join(servers.keys()),
+                )
+            return servers
+        except Exception as exc:
+            last_exc = exc
+            if attempt < 2:
+                logging.warning(
+                    "Failed to read global config (attempt %d/2), retrying: %s",
+                    attempt,
+                    exc,
+                )
+                time.sleep(1)
+
+    logging.exception("Failed to read global Copilot CLI config", exc_info=last_exc)
+    return {}
 
 
 def build_project_mcp_server(config: Config) -> dict:

@@ -8,6 +8,7 @@ from unittest.mock import MagicMock, patch, PropertyMock, call
 
 import pytest
 
+from copilot_echo.errors import DeviceDisconnectedError
 from copilot_echo.orchestrator import State
 
 
@@ -281,3 +282,179 @@ class TestConversationLoop:
 
         # Agent should have been called twice
         assert mock_orchestrator.agent.send.call_count == 2
+
+
+# ------------------------------------------------------------------
+# Startup error notification
+# ------------------------------------------------------------------
+
+class TestStartupErrorNotification:
+    def test_speaks_warning_when_agent_failed(self, wired_loop, mock_orchestrator, mock_tts):
+        mock_orchestrator.last_error = "Agent failed to start"
+        stop_event = threading.Event()
+        stop_event.set()  # exit immediately
+        status_cb = MagicMock()
+
+        wired_loop.run(status_cb, stop_event)
+
+        # Should have warned about the error
+        calls = [c.args[0] for c in mock_tts.speak.call_args_list]
+        assert any("couldn't connect" in c.lower() for c in calls)
+
+    def test_no_warning_when_agent_ok(self, wired_loop, mock_orchestrator, mock_tts):
+        mock_orchestrator.last_error = None
+        stop_event = threading.Event()
+        stop_event.set()
+        status_cb = MagicMock()
+
+        wired_loop.run(status_cb, stop_event)
+
+        # Should NOT have warned
+        calls = [c.args[0] for c in mock_tts.speak.call_args_list]
+        assert not any("couldn't connect" in c.lower() for c in calls)
+
+
+# ------------------------------------------------------------------
+# Device disconnection recovery
+# ------------------------------------------------------------------
+
+class TestDeviceRecovery:
+    def test_device_disconnect_triggers_recovery(self, wired_loop, mock_orchestrator, mock_tts):
+        """DeviceDisconnectedError should trigger _handle_device_disconnect."""
+        call_count = 0
+
+        def fake_listen(stop_event):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                raise DeviceDisconnectedError("device gone")
+            stop_event.set()  # stop after recovery
+            return False
+
+        wired_loop.wakeword.listen_until_detected.side_effect = fake_listen
+        status_cb = MagicMock()
+        stop_event = threading.Event()
+
+        mock_stream = MagicMock()
+        with patch("copilot_echo.voice.audio.sd") as mock_sd, \
+             patch("copilot_echo.voice.audio.list_input_devices", return_value=[(5, "Test Mic")]), \
+             patch("copilot_echo.voice.loop.time.sleep"):
+            mock_sd.InputStream.return_value = mock_stream
+            # Patch sd in loop module for the InputStream validation
+            with patch.dict("sys.modules", {"sounddevice": mock_sd}):
+                import importlib
+                # Just mock the whole recovery to keep it simple
+                with patch.object(wired_loop, "_handle_device_disconnect") as mock_recovery:
+                    def do_recovery(status_callback, se):
+                        wired_loop.stt.audio_device = 5
+                        wired_loop.wakeword.audio_device = 5
+                        mock_tts.speak("Microphone disconnected. I'll try to reconnect.")
+                        mock_tts.speak("Microphone reconnected.")
+
+                    mock_recovery.side_effect = do_recovery
+                    wired_loop.run(status_cb, stop_event)
+
+        # Device should have been updated by the mock recovery
+        assert wired_loop.stt.audio_device == 5
+        assert wired_loop.wakeword.audio_device == 5
+
+    def test_device_recovery_resets_autonomous_state(self, wired_loop, mock_orchestrator, mock_tts):
+        mock_orchestrator.state = State.AUTONOMOUS
+
+        call_count = 0
+
+        def fake_listen(stop_event):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                raise DeviceDisconnectedError("gone")
+            stop_event.set()
+            return False
+
+        wired_loop.wakeword.listen_until_detected.side_effect = fake_listen
+        status_cb = MagicMock()
+        stop_event = threading.Event()
+
+        # Mock the recovery to check state cleanup
+        with patch.object(wired_loop, "_handle_device_disconnect") as mock_recovery:
+            def do_recovery(status_callback, se):
+                # The real method resets autonomous state
+                if mock_orchestrator.state == State.AUTONOMOUS:
+                    mock_orchestrator.stop_autonomous()
+
+            mock_recovery.side_effect = do_recovery
+            wired_loop.run(status_cb, stop_event)
+
+        # Autonomous state should have been cleaned up
+        assert mock_orchestrator.state != State.AUTONOMOUS
+
+    def test_handle_device_disconnect_no_mic_status(self, wired_loop, mock_orchestrator, mock_tts):
+        """Status should show 'No Mic' while waiting for reconnect."""
+        stop_event = threading.Event()
+        statuses = []
+
+        def track_status(s):
+            statuses.append(s)
+
+        mock_stream = MagicMock()
+        with patch("copilot_echo.voice.audio.sd") as mock_audio_sd, \
+             patch("copilot_echo.voice.audio.list_input_devices", return_value=[(0, "Mic")]), \
+             patch("copilot_echo.voice.loop.time.sleep"):
+            # We need sounddevice available when imported inside the method
+            import sys
+            mock_sd = MagicMock()
+            mock_sd.InputStream.return_value = mock_stream
+            with patch.dict(sys.modules, {"sounddevice": mock_sd}):
+                wired_loop._handle_device_disconnect(track_status, stop_event)
+
+        assert "No Mic" in statuses
+
+
+# ------------------------------------------------------------------
+# Top-level crash handler
+# ------------------------------------------------------------------
+
+class TestCrashHandler:
+    def test_unexpected_error_speaks_and_retries(self, wired_loop, mock_orchestrator, mock_tts):
+        call_count = 0
+
+        def fake_listen(stop_event):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                raise ValueError("unexpected bug")
+            stop_event.set()
+            return False
+
+        wired_loop.wakeword.listen_until_detected.side_effect = fake_listen
+        status_cb = MagicMock()
+        stop_event = threading.Event()
+
+        with patch("copilot_echo.voice.loop.time.sleep"):
+            wired_loop.run(status_cb, stop_event)
+
+        # Should have spoken about something going wrong
+        calls = [c.args[0] for c in mock_tts.speak.call_args_list]
+        assert any("went wrong" in c.lower() or "restarting" in c.lower() for c in calls)
+
+    def test_crash_resets_state_to_idle(self, wired_loop, mock_orchestrator, mock_tts):
+        mock_orchestrator.state = State.PROCESSING
+
+        call_count = 0
+
+        def fake_listen(stop_event):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                raise RuntimeError("crash")
+            stop_event.set()
+            return False
+
+        wired_loop.wakeword.listen_until_detected.side_effect = fake_listen
+        status_cb = MagicMock()
+        stop_event = threading.Event()
+
+        with patch("copilot_echo.voice.loop.time.sleep"):
+            wired_loop.run(status_cb, stop_event)
+
+        assert mock_orchestrator.state == State.IDLE

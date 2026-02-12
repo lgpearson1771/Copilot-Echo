@@ -9,7 +9,7 @@ import time
 from collections.abc import Callable
 
 from copilot_echo.config import Config
-from copilot_echo.orchestrator import Orchestrator
+from copilot_echo.orchestrator import Orchestrator, State
 from copilot_echo.voice.stt import SpeechToText
 from copilot_echo.voice.tts import INTERRUPT_LISTEN_SEC, INTERRUPT_PHRASES, TextToSpeech
 
@@ -131,7 +131,26 @@ class AutonomousRunner:
 
         deadline = time.time() + max_minutes * 60
         current_prompt = initial_prompt
+        try:
+            self._autonomous_loop(
+                current_prompt, max_steps, deadline, status_callback, stop_event
+            )
+        except Exception:
+            # Ensure cleanup even on unexpected errors (e.g. device disconnect)
+            self._stop_interrupt_watcher()
+            if self.orchestrator.state == State.AUTONOMOUS:
+                self.orchestrator.stop_autonomous()
+            raise
 
+    def _autonomous_loop(
+        self,
+        current_prompt: str,
+        max_steps: int,
+        deadline: float,
+        status_callback: Callable[[str], None],
+        stop_event: threading.Event,
+    ) -> None:
+        """Inner loop extracted from _run for clean exception handling."""
         for step in range(1, max_steps + 1):
             if stop_event.is_set():
                 break

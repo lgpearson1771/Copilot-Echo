@@ -35,6 +35,7 @@ class Orchestrator:
         except Exception:
             logging.exception("Failed to start Copilot agent")
             self.last_error = "Agent failed to start"
+            self.state = State.ERROR
 
     def stop_agent(self) -> None:
         """Shutdown the Copilot SDK agent."""

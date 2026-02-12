@@ -38,6 +38,39 @@ class TestLoadGlobalMcpServers:
             result = load_global_mcp_servers()
         assert result == {}
 
+    def test_retries_on_transient_failure(self, tmp_path):
+        """Should retry once and succeed on the second attempt."""
+        servers = {
+            "test_server": {
+                "type": "stdio",
+                "command": "node",
+                "args": ["server.js"],
+            }
+        }
+        config_file = tmp_path / "config.json"
+        config_file.write_text(
+            json.dumps({"mcp_servers": servers}), encoding="utf-8"
+        )
+
+        call_count = 0
+        original_open = open
+
+        def flaky_open(*args, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                raise IOError("file locked")
+            return original_open(*args, **kwargs)
+
+        with patch(
+            "copilot_echo.mcp_config.os.path.expanduser",
+            return_value=str(config_file),
+        ), patch("builtins.open", side_effect=flaky_open), \
+             patch("copilot_echo.mcp_config.time.sleep"):
+            result = load_global_mcp_servers()
+
+        assert "test_server" in result
+
     def test_empty_servers(self, tmp_path):
         config_file = tmp_path / "config.json"
         config_file.write_text(json.dumps({"mcp_servers": {}}), encoding="utf-8")
