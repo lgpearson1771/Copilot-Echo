@@ -11,12 +11,13 @@ import os
 import re
 import shutil
 from datetime import date
-from typing import List, Optional
+
+from copilot_echo.paths import project_root
 
 
 def _resolve_root() -> str:
-    """Return the repo root (two levels up from this source file)."""
-    return os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    """Return the repo root."""
+    return project_root()
 
 
 def _slugify(name: str) -> str:
@@ -116,7 +117,7 @@ def archive_project(name: str, projects_dir: str) -> str:
     return dst
 
 
-def list_projects(projects_dir: str) -> tuple[List[str], List[str]]:
+def list_projects(projects_dir: str) -> tuple[list[str], list[str]]:
     """Return ``(active_names, archived_names)`` based on files on disk."""
     active_dir, archive_dir = _ensure_dirs(projects_dir)
     active = _list_names(active_dir)
@@ -167,7 +168,7 @@ def load_active_projects(projects_dir: str, max_chars: int = 0) -> str:
     return ""
 
 
-def load_archived_project(name: str, projects_dir: str) -> Optional[str]:
+def load_archived_project(name: str, projects_dir: str) -> str | None:
     """Load a single archived project by name.  Returns ``None`` if not found."""
     _, archive_dir = _ensure_dirs(projects_dir)
     slug = _slugify(name)
@@ -177,7 +178,7 @@ def load_archived_project(name: str, projects_dir: str) -> Optional[str]:
     return _read(path)
 
 
-def get_project_path(name: str, projects_dir: str) -> Optional[str]:
+def get_project_path(name: str, projects_dir: str) -> str | None:
     """Return the absolute path to an active project file, or ``None``."""
     active_dir, _ = _ensure_dirs(projects_dir)
     slug = _slugify(name)
@@ -296,7 +297,7 @@ def replace_section(
     return f"{msg} File is now {char_count} chars."
 
 
-def read_active_project(name: str, projects_dir: str) -> Optional[str]:
+def read_active_project(name: str, projects_dir: str) -> str | None:
     """Read and return the full content of an active project.
 
     Returns ``None`` if the project doesn't exist.
@@ -316,7 +317,7 @@ def _read(path: str) -> str:
         return f.read().strip()
 
 
-def _list_names(directory: str) -> List[str]:
+def _list_names(directory: str) -> list[str]:
     """Return human-readable project names from filenames in *directory*."""
     names: list[str] = []
     try:

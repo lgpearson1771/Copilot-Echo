@@ -175,7 +175,7 @@ Edit `config/config.yaml`. Key settings:
 To list available audio input devices:
 
 ```powershell
-./run.ps1 -m copilot_echo.voice.devices
+./run.ps1 -m copilot_echo.voice.list_devices
 ```
 
 Set `audio_device` (index) or `audio_device_name` (substring match) to select a mic.
@@ -194,17 +194,22 @@ See `docs/wakeword_training.md` for a step-by-step guide.
 app.py              → Entry point, starts agent + tray
 tray.py             → System tray icon (pystray), Caps Lock hotkey listener, spawns voice loop thread
 orchestrator.py     → State machine (Idle/Listening/Processing/Autonomous/Paused)
-agent.py            → Async Copilot SDK bridge, MCP server loading, knowledge injection
+agent.py            → Async Copilot SDK bridge (slim — delegates config to prompt_builder)
+paths.py            → Shared project root path utility
+config.py           → Dataclass config, YAML loader
+mcp_config.py       → MCP server loading from global CLI config + project MCP registration
+prompt_builder.py   → System prompt assembly, knowledge file loading, session config
+projects.py         → Project knowledge base management (create/archive/list/load)
 project_mcp.py      → Local MCP server exposing project knowledge tools to the agent
 voice/
   loop.py           → Main voice loop: wake word → conversation → agent → TTS
+  commands.py       → Voice command handler for project knowledge base commands
+  autonomous.py     → Autonomous "Get to Work" mode with interrupt watcher
   wakeword.py       → Wake word detection (openwakeword / STT fallback)
   stt.py            → Speech-to-text (faster-whisper), fixed + VAD-based recording
-  tts.py            → Text-to-speech (pyttsx3)
+  tts.py            → Text-to-speech (pyttsx3), interruptible sentence-by-sentence speaker
   audio.py          → Audio device resolution helpers
-  devices.py        → CLI tool to list input devices
-config.py           → Dataclass config, YAML loader
-projects.py         → Project knowledge base management (create/archive/list/load)
+  list_devices.py   → CLI tool to list input devices
 ```
 
 ## Roadmap

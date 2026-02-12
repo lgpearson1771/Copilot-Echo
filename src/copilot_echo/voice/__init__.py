@@ -1,1 +1,1 @@
-__all__ = ["wakeword", "stt", "tts", "loop"]
+__all__ = ["autonomous", "commands", "loop", "stt", "tts", "wakeword"]

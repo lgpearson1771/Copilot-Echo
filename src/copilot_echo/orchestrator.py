@@ -3,7 +3,6 @@ from __future__ import annotations
 import enum
 import logging
 import threading
-from typing import Optional
 
 from copilot_echo.agent import Agent
 from copilot_echo.config import Config
@@ -24,7 +23,7 @@ class Orchestrator:
     def __init__(self, config: Config) -> None:
         self.config = config
         self.state = State.IDLE
-        self.last_error: Optional[str] = None
+        self.last_error: str | None = None
         self.agent = Agent(config)
         self.interrupt_event = threading.Event()
 

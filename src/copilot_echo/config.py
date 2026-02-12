@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import List, Optional
 
 import yaml
 
@@ -17,8 +16,8 @@ class AppConfig:
 class VoiceConfig:
     wakeword_engine: str = "stt"
     wake_word: str = "hey jarvis"
-    audio_device: Optional[int] = None
-    audio_device_name: Optional[str] = None
+    audio_device: int | None = None
+    audio_device_name: str | None = None
     sample_rate: int = 16000
     wake_listen_seconds: float = 2.5
     command_listen_seconds: float = 5.0
@@ -28,7 +27,7 @@ class VoiceConfig:
     post_tts_cooldown_seconds: float = 0.5
     conversation_window_seconds: float = 30.0
     wakeword_inference_framework: str = "tflite"
-    wakeword_models: List[str] = field(default_factory=list)
+    wakeword_models: list[str] = field(default_factory=list)
     wakeword_threshold: float = 0.6
     wakeword_chunk_size: int = 1280
     wakeword_holdoff_seconds: float = 1.0
@@ -42,30 +41,30 @@ class VoiceConfig:
 @dataclass
 class AutonomousRoutine:
     name: str = ""
-    trigger_phrases: List[str] = field(default_factory=list)
+    trigger_phrases: list[str] = field(default_factory=list)
     prompt: str = ""
-    max_steps: Optional[int] = None  # overrides global default if set
+    max_steps: int | None = None  # overrides global default if set
 
 
 @dataclass
 class AgentConfig:
-    knowledge_file: Optional[str] = None
+    knowledge_file: str | None = None
     projects_dir: str = "config/projects"
     project_max_chars: int = 4000
-    autonomous_routines: List[AutonomousRoutine] = field(default_factory=list)
+    autonomous_routines: list[AutonomousRoutine] = field(default_factory=list)
     autonomous_max_steps: int = 10
     autonomous_max_minutes: int = 10
 
 
 @dataclass
 class RepoConfig:
-    default_path: Optional[str] = None
+    default_path: str | None = None
     require_confirmation: bool = True
 
 
 @dataclass
 class ToolsConfig:
-    allowlist: List[str]
+    allowlist: list[str]
 
 
 @dataclass

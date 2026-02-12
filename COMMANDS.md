@@ -24,7 +24,7 @@ Substitute `run.bat` for `run.ps1` if preferred.
 ## List audio input devices
 
 ```powershell
-./run.ps1 -m copilot_echo.voice.devices
+./run.ps1 -m copilot_echo.voice.list_devices
 ```
 
 ## Voice Commands (in-app)
