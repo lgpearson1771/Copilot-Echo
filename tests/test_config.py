@@ -42,6 +42,9 @@ class TestDataclassDefaults:
         assert cfg.wake_word == "hey jarvis"
         assert cfg.wakeword_models == []
         assert cfg.conversation_window_seconds == 30.0
+        assert cfg.auto_pause_on_call is False
+        assert cfg.auto_pause_apps == ["ms-teams.exe", "Teams.exe", "Zoom.exe"]
+        assert cfg.auto_pause_poll_seconds == 5.0
 
     def test_agent_config_defaults(self):
         cfg = AgentConfig()

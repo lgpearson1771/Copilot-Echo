@@ -67,6 +67,12 @@ class VoiceLoop:
     def run(self, status_callback: Callable[[str], None], stop_event) -> None:
         while not stop_event.is_set():
             if self.orchestrator.state == State.PAUSED:
+                # Auto-paused by call detector: silence the mic completely.
+                if self.orchestrator.is_auto_paused:
+                    status_callback("Paused (Call)")
+                    time.sleep(0.5)
+                    continue
+
                 status_callback("Paused")
                 text = self.stt.transcribe_once(self.config.voice.wake_listen_seconds)
                 normalized = text.lower().strip() if text else ""

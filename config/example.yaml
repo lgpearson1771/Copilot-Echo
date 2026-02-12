@@ -37,6 +37,13 @@ voice:
   stt_device: "cpu"        # cpu or cuda
   stt_compute_type: "int8" # int8, float16, float32
 
+  # Auto-pause: pause the listener when a configured app is in an active call.
+  # Detects both render (speaker) and capture (mic) audio sessions via WASAPI
+  # so muting during a call does not cause a false resume.
+  # auto_pause_on_call: false
+  # auto_pause_apps: ["ms-teams.exe", "Teams.exe", "Zoom.exe"]
+  # auto_pause_poll_seconds: 5.0
+
 agent:
   # Personal knowledge file injected into the agent system prompt.
   # Create config/knowledge.md with persistent facts (org, project, repos, etc.).

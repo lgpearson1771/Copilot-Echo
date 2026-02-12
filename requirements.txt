@@ -8,5 +8,6 @@ openwakeword
 faster-whisper
 pyttsx3
 psutil
+pycaw
 pyyaml
 mcp

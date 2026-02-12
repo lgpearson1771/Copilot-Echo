@@ -9,6 +9,7 @@ from PIL import Image, ImageDraw
 
 from copilot_echo.config import Config
 from copilot_echo.orchestrator import Orchestrator, State
+from copilot_echo.voice.call_detector import CallDetector
 from copilot_echo.voice.loop import VoiceLoop
 
 
@@ -45,6 +46,15 @@ class TrayApp:
             daemon=True,
         )
         hotkey_thread.start()
+
+        # Start the call detector (Teams/Zoom auto-pause)
+        call_detector = CallDetector(self.config, self.orchestrator)
+        call_thread = threading.Thread(
+            target=call_detector.run,
+            args=(stop_event,),
+            daemon=True,
+        )
+        call_thread.start()
 
         self.icon.run()
         stop_event.set()

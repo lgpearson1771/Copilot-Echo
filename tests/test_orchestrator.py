@@ -41,6 +41,52 @@ class TestStateTransitions:
         assert mock_orchestrator.state == State.PAUSED
 
 
+class TestAutoPause:
+    def test_auto_pause_from_idle(self, mock_orchestrator):
+        mock_orchestrator.auto_pause()
+        assert mock_orchestrator.state == State.PAUSED
+        assert mock_orchestrator.is_auto_paused is True
+
+    def test_auto_pause_from_listening(self, mock_orchestrator):
+        mock_orchestrator.state = State.LISTENING
+        mock_orchestrator.auto_pause()
+        assert mock_orchestrator.state == State.PAUSED
+        assert mock_orchestrator.is_auto_paused is True
+
+    def test_auto_pause_noop_during_processing(self, mock_orchestrator):
+        mock_orchestrator.state = State.PROCESSING
+        mock_orchestrator.auto_pause()
+        assert mock_orchestrator.state == State.PROCESSING
+        assert mock_orchestrator.is_auto_paused is False
+
+    def test_auto_pause_noop_during_autonomous(self, mock_orchestrator):
+        mock_orchestrator.state = State.AUTONOMOUS
+        mock_orchestrator.auto_pause()
+        assert mock_orchestrator.state == State.AUTONOMOUS
+        assert mock_orchestrator.is_auto_paused is False
+
+    def test_auto_resume_when_auto_paused(self, mock_orchestrator):
+        mock_orchestrator.auto_pause()
+        mock_orchestrator.auto_resume()
+        assert mock_orchestrator.state == State.IDLE
+        assert mock_orchestrator.is_auto_paused is False
+
+    def test_auto_resume_noop_when_manually_paused(self, mock_orchestrator):
+        mock_orchestrator.pause()
+        mock_orchestrator.auto_resume()
+        assert mock_orchestrator.state == State.PAUSED
+
+    def test_resume_clears_auto_paused_flag(self, mock_orchestrator):
+        mock_orchestrator.auto_pause()
+        assert mock_orchestrator.is_auto_paused is True
+        mock_orchestrator.resume()
+        assert mock_orchestrator.is_auto_paused is False
+        assert mock_orchestrator.state == State.IDLE
+
+    def test_is_auto_paused_initially_false(self, mock_orchestrator):
+        assert mock_orchestrator.is_auto_paused is False
+
+
 class TestSendToAgent:
     def test_send_transitions_to_processing_then_idle(self, mock_orchestrator):
         """State should go through PROCESSING and end at IDLE."""

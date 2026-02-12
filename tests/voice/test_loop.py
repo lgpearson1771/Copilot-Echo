@@ -115,6 +115,28 @@ class TestPausedState:
         # Should have called resume
         mock_tts.speak.assert_any_call("Resuming listening.")
 
+    def test_auto_paused_skips_stt(self, wired_loop, mock_orchestrator, mock_stt):
+        """When auto-paused (call detected), STT should NOT be polled."""
+        mock_orchestrator.state = State.PAUSED
+        mock_orchestrator._auto_paused = True
+
+        stop_event = threading.Event()
+        status_cb = MagicMock()
+
+        def run_briefly():
+            time.sleep(0.3)
+            stop_event.set()
+
+        t = threading.Thread(target=run_briefly, daemon=True)
+        t.start()
+
+        wired_loop.run(status_cb, stop_event)
+        t.join(timeout=2)
+
+        # STT should never have been called
+        mock_stt.transcribe_once.assert_not_called()
+        status_cb.assert_any_call("Paused (Call)")
+
 
 class TestConversationLoop:
     def test_stop_listening_pauses(self, wired_loop, mock_orchestrator, mock_stt, mock_tts):

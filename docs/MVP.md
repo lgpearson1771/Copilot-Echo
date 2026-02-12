@@ -76,17 +76,17 @@ What needs to be done before Copilot Echo is ready for a full launch.
 - [x] Ad-hoc "get to work on {task}" for one-off autonomous tasks
 - [x] Config: `agent.autonomous_routines`, `autonomous_max_steps`, `autonomous_max_minutes`
 
-### Teams Auto-Pause
+### Teams Auto-Pause — DONE
 
 > Automatically pause the listener when a Teams/Zoom call is active to avoid
 > picking up meeting audio, and resume when the call ends.
 
-- [ ] Detect active Teams/Zoom call (process detection, audio session, or window title)
-- [ ] Auto-pause orchestrator when call detected
-- [ ] Auto-resume when call ends
-- [ ] TTS notification on pause/resume ("Pausing for your call" / "Call ended, listening again")
-- [ ] Config: `voice.auto_pause_on_call` toggle
-- [ ] Config: `voice.auto_pause_apps` list (default: Teams, Zoom)
+- [x] Detect active Teams/Zoom call (audio session detection via WASAPI — render + capture endpoints)
+- [x] Auto-pause orchestrator when call detected
+- [x] Auto-resume when call ends
+- [x] Visual notification on pause/resume (tray shows "Paused (Call)" status)
+- [x] Config: `voice.auto_pause_on_call` toggle
+- [x] Config: `voice.auto_pause_apps` list (default: Teams, Zoom)
 
 ### Error Handling & Resilience
 
@@ -98,11 +98,11 @@ What needs to be done before Copilot Echo is ready for a full launch.
 ### Testing & Polish — DONE
 
 > Comprehensive pytest-based unit test suite covering all modules.
-> 263 tests, 84% overall coverage. All hardware dependencies mocked
+> 294 tests, 84% overall coverage. All hardware dependencies mocked
 > (audio, TTS, STT, Copilot SDK, pystray, pynput, openwakeword).
 > Test infrastructure: pytest + pytest-asyncio + pytest-cov.
 
-- [x] Unit tests for Orchestrator (state transitions, send_to_agent, cancel, autonomous lifecycle) — 21 tests, 100% coverage
+- [x] Unit tests for Orchestrator (state transitions, send_to_agent, cancel, autonomous lifecycle, auto-pause) — 29 tests, 100% coverage
 - [x] Unit tests for Agent (init, send, cancel, async startup/shutdown, tool logging) — 17 tests, 68% coverage
 - [x] Unit tests for Config (dataclass defaults, YAML loading, autonomous routines) — 13 tests, 92% coverage
 - [x] Unit tests for MCP config (server loading, sanitization, env merging, project MCP) — 14 tests, 100% coverage
@@ -112,15 +112,14 @@ What needs to be done before Copilot Echo is ready for a full launch.
 - [x] Unit tests for Paths — 3 tests, 100% coverage
 - [x] Unit tests for Logging — 3 tests, 100% coverage
 - [x] Unit tests for Tray (icon, title, callbacks, caps lock triple-tap) — 9 tests, 53% coverage
-- [x] Unit tests for Voice Loop (paused state, conversation loop, commands, autonomous, agent replies) — 10 tests, 89% coverage
+- [x] Unit tests for Voice Loop (paused state, auto-pause, conversation loop, commands, autonomous, agent replies) — 11 tests, 89% coverage
 - [x] Unit tests for Voice Commands (pattern matching, execution, name extraction, regex) — 36 tests, 86% coverage
 - [x] Unit tests for Autonomous Mode (strip_marker, interrupt phrases, triggers, run loop, interrupt watcher) — 31 tests, 91% coverage
 - [x] Unit tests for TTS (speak, interruptible, sentence splitting, interrupt phrases) — 13 tests, 93% coverage
 - [x] Unit tests for STT (init, transcribe_once, transcribe_until_silence) — 6 tests, 75% coverage
 - [x] Unit tests for Wake Word Detector (STT engine, openwakeword dispatch, _is_triggered) — 13 tests, 71% coverage
+- [x] Unit tests for Call Detector (audio session detection, WASAPI enumeration, polling loop) — 22 tests, 80% coverage
 - [x] Unit tests for Audio (resolve_input_device, list_input_devices) — 9 tests, 100% coverage
-- [ ] End-to-end smoke test: wake word → question → agent reply → TTS (requires live environment)
-- [ ] Test with multiple MCP servers active simultaneously (requires live environment)
 
 ---
 

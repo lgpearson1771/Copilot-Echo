@@ -13,6 +13,7 @@ A local-only Windows tray app that listens for a wake word, routes voice command
 - **Knowledge file** — a personal markdown file injected into the agent's system prompt so it remembers your org, project, repos, and preferences across sessions.
 - **System tray UI** — runs as a Windows tray icon with Pause / Resume / Stop / Quit controls and status display.
 - **"Get to Work" autonomous mode** — pre-configured routines (standup prep, PR review) and ad-hoc "get to work on {task}" for multi-step agent workflows. The agent works step-by-step, speaking progress aloud, with interruptible playback and safety limits.
+- **Teams/Zoom auto-pause** — automatically pauses the listener when a configured app (Teams, Zoom) is in an active call, detected via Windows Audio Session API (both render and capture endpoints so muting doesn't cause a false resume). Resumes when the call ends. Fully configurable.
 - **Voice commands** — built-in phrases for controlling the app hands-free (see below).
 
 ## Requirements
@@ -171,6 +172,9 @@ Edit `config/config.yaml`. Key settings:
 | `agent.autonomous_max_steps` | `10` | Max agent round-trips per autonomous routine |
 | `agent.autonomous_max_minutes` | `10` | Hard time limit per autonomous routine |
 | `agent.autonomous_routines` | `[]` | List of pre-configured routines (see example.yaml) |
+| `voice.auto_pause_on_call` | `false` | Auto-pause listener during Teams/Zoom calls |
+| `voice.auto_pause_apps` | `["ms-teams.exe", "Teams.exe", "Zoom.exe"]` | Process names to detect as active calls |
+| `voice.auto_pause_poll_seconds` | `5.0` | How often to check for active calls |
 
 To list available audio input devices:
 
@@ -205,6 +209,7 @@ voice/
   loop.py           → Main voice loop: wake word → conversation → agent → TTS
   commands.py       → Voice command handler for project knowledge base commands
   autonomous.py     → Autonomous "Get to Work" mode with interrupt watcher
+  call_detector.py  → Teams/Zoom auto-pause via Windows Audio Session API (render + capture)
   wakeword.py       → Wake word detection (openwakeword / STT fallback)
   stt.py            → Speech-to-text (faster-whisper), fixed + VAD-based recording
   tts.py            → Text-to-speech (pyttsx3), interruptible sentence-by-sentence speaker
@@ -225,8 +230,8 @@ voice/
 - [x] Personal knowledge file for persistent agent context
 - [x] Project knowledge base for long-running projects
 - [x] "Get to work" autonomous mode
-- [x] Comprehensive unit test suite (263 tests, 84% coverage)
-- [ ] Teams/Zoom auto-pause integration
+- [x] Comprehensive unit test suite (294 tests, 84% coverage)
+- [x] Teams/Zoom auto-pause integration
 - [ ] Error handling & resilience hardening
 - [ ] Repo edit confirmation flow
 

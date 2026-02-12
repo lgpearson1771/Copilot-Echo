@@ -26,6 +26,7 @@ class Orchestrator:
         self.last_error: str | None = None
         self.agent = Agent(config)
         self.interrupt_event = threading.Event()
+        self._auto_paused: bool = False
 
     def start_agent(self) -> None:
         """Start the Copilot SDK agent."""
@@ -43,7 +44,24 @@ class Orchestrator:
         self.state = State.PAUSED
 
     def resume(self) -> None:
+        self._auto_paused = False
         self.state = State.IDLE
+
+    def auto_pause(self) -> None:
+        """Pause due to an active call.  Only takes effect from IDLE or LISTENING."""
+        if self.state in (State.IDLE, State.LISTENING):
+            self._auto_paused = True
+            self.state = State.PAUSED
+
+    def auto_resume(self) -> None:
+        """Resume after an auto-pause.  No-op if the pause was manual."""
+        if self._auto_paused:
+            self._auto_paused = False
+            self.state = State.IDLE
+
+    @property
+    def is_auto_paused(self) -> bool:
+        return self._auto_paused
 
     def on_wake_word(self) -> None:
         if self.state != State.PAUSED:
