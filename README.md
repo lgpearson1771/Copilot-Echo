@@ -4,7 +4,7 @@ A local-only Windows tray app that listens for a wake word, routes voice command
 
 ## Features
 
-- **Wake word detection** — always-listening via openwakeword (ONNX). Uses the built-in "hey jarvis" model by default; custom phrases require training a new model (see `docs/wakeword_training.md`).
+- **Wake word detection** — always-listening via openwakeword (ONNX). Ships with a custom-trained "hey echo" model; custom phrases can be trained using [openwakeword-trainer](https://github.com/lgpearson1771/openwakeword-trainer).
 - **Local speech-to-text** — faster-whisper (base model, CPU, int8) with VAD-based recording that captures your full utterance.
 - **Local text-to-speech** — pyttsx3, sentence-by-sentence with interruptible playback.
 - **Conversation mode** — after the wake word, stays in a listening loop (configurable window) so you can have multi-turn conversations without repeating the wake word.
@@ -46,7 +46,7 @@ Or use `run.bat` instead of `run.ps1`.
 
 | Phrase | Effect |
 | --- | --- |
-| **"Hey Jarvis"** (wake word) | Activates conversation mode |
+| **"Hey Echo"** (wake word) | Activates conversation mode |
 | **"Stop listening"** | Pauses the listener (tray shows Paused) |
 | **"Resume listening"** or wake word while paused | Resumes the listener |
 | **"Hold on a sec" / "Give me more time"** | Extends the conversation window by 30 seconds |
@@ -131,7 +131,7 @@ Say any trigger phrase (e.g. "morning standup") during conversation mode to star
 
 Say **"get to work on {task}"** for any one-off autonomous workflow:
 
-> "Hey Jarvis… get to work on reviewing the open PRs for the metrics repo"
+> "Hey Echo… get to work on reviewing the open PRs for the metrics repo"
 
 ### How It Works
 
@@ -157,9 +157,9 @@ Edit `config/config.yaml`. Key settings:
 | Setting | Default | Description |
 | --- | --- | --- |
 | `voice.wakeword_engine` | `openwakeword` | `stt` (keyword match) or `openwakeword` (recommended) |
-| `voice.wake_word` | `hey jarvis` | Wake phrase |
+| `voice.wake_word` | `hey echo` | Wake phrase |
 | `voice.wakeword_inference_framework` | `onnx` | `onnx` or `tflite` |
-| `voice.wakeword_models` | `["hey jarvis"]` | Model names or paths under `models/` |
+| `voice.wakeword_models` | `["models/hey_echo.onnx"]` | Model names or paths under `models/` |
 | `voice.wakeword_threshold` | `0.8` | Detection confidence threshold |
 | `voice.conversation_window_seconds` | `5.0` | Silence timeout before exiting conversation mode |
 | `voice.utterance_end_seconds` | `1.5` | Silence after speech that ends an utterance |
@@ -208,11 +208,20 @@ Use any substring from the voice name (e.g. `"Zira"`, `"David"`, `"Hazel"`). If 
 
 ### Custom Wake Word Models
 
-1. Train a model with openwakeword's Colab notebook for your phrase.
-2. Save the exported file under `models/` (e.g., `models/hey_echo.onnx`).
-3. Set `wakeword_models: ["models/hey_echo.onnx"]` in config.
+To train your own custom wake word (e.g., "hey computer", "ok assistant"), use the companion training toolkit:
 
-See `docs/wakeword_training.md` for a step-by-step guide.
+**[openwakeword-trainer](https://github.com/lgpearson1771/openwakeword-trainer)** — A granular 13-step pipeline that handles TTS synthesis, augmentation, training, and ONNX export.
+
+1. Train a model using openwakeword-trainer.
+2. Copy the exported `.onnx` (and `.onnx.data`) files to `models/`.
+3. Update `config/config.yaml`:
+
+   ```yaml
+   voice:
+     wake_word: "your phrase"
+     wakeword_models: ["models/your_model.onnx"]
+     wakeword_threshold: 0.5
+   ```
 
 ## Architecture
 

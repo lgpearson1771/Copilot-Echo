@@ -5,3 +5,6 @@ __pycache__/
 config/config.yaml
 config/knowledge.md
 config/projects/
+
+# Training artifacts (moved to openwakeword-trainer repo)
+training/
