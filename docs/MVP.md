@@ -6,7 +6,7 @@ What needs to be done before Copilot Echo is ready for a full launch.
 
 ## Core Voice Pipeline — DONE
 
-- [x] Wake word detection (openwakeword, ONNX, "hey jarvis")
+- [x] Wake word detection (openwakeword, ONNX, "hey echo")
 - [x] Local STT with VAD-based utterance detection (faster-whisper)
 - [x] Local TTS with sentence-by-sentence playback (pyttsx3)
 - [x] Interruptible TTS via voice phrases ("stop", "let me interrupt", "listen up")
@@ -33,7 +33,7 @@ What needs to be done before Copilot Echo is ready for a full launch.
 - [x] COMMANDS.md with dev commands and voice command reference
 - [x] example.yaml with all current settings and comments
 - [x] Knowledge file section in README
-- [x] Wake word training guide (docs/wakeword_training.md)
+- [x] Wake word training toolkit ([openwakeword-trainer](https://github.com/lgpearson1771/openwakeword-trainer))
 
 ---
 
@@ -151,7 +151,7 @@ What needs to be done before Copilot Echo is ready for a full launch.
 ## Post-MVP / Nice to Have
 
 - [ ] Repo edit confirmation flow (agent proposes edits, user confirms by voice)
-- [ ] Custom wake word model training (currently limited to built-in phrases)
+- [x] Custom wake word model training ([openwakeword-trainer](https://github.com/lgpearson1771/openwakeword-trainer))
 - [ ] Conversation history / session logging
 - [ ] Multi-language STT support
 - [ ] GPU acceleration for STT (CUDA)

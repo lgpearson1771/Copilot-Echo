@@ -95,7 +95,7 @@ class TestPausedState:
             nonlocal call_count
             call_count += 1
             if call_count == 1:
-                return "hey jarvis"
+                return "hey echo"
             return ""
 
         mock_stt.transcribe_once.side_effect = fake_transcribe

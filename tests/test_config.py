@@ -38,9 +38,9 @@ class TestDataclassDefaults:
         assert cfg.stt_model == "base"
         assert cfg.stt_device == "cpu"
         assert cfg.stt_compute_type == "int8"
-        assert cfg.wakeword_engine == "stt"
-        assert cfg.wake_word == "hey jarvis"
-        assert cfg.wakeword_models == []
+        assert cfg.wakeword_engine == "openwakeword"
+        assert cfg.wake_word == "hey echo"
+        assert cfg.wakeword_models == ["models/hey_echo.onnx"]
         assert cfg.conversation_window_seconds == 30.0
         assert cfg.auto_pause_on_call is False
         assert cfg.auto_pause_apps == ["ms-teams.exe", "Teams.exe", "Zoom.exe"]

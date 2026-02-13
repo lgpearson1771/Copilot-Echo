@@ -31,7 +31,7 @@ Substitute `run.bat` for `run.ps1` if preferred.
 
 | Phrase | Effect |
 | --- | --- |
-| **"Hey Jarvis"** | Activates conversation mode |
+| **"Hey Echo"** | Activates conversation mode |
 | **"Stop listening"** | Pauses the listener |
 | **"Resume listening"** / wake word (while paused) | Resumes the listener |
 | **"Hold on a sec"** / **"Give me more time"** | Extends conversation window by 30s |

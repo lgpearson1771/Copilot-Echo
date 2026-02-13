@@ -24,7 +24,7 @@ class TestWakeWordSTT:
 
             return WakeWordDetector(
                 engine="stt",
-                phrase="hey jarvis",
+                phrase="hey echo",
                 stt=mock_stt,
                 listen_seconds=1.0,
                 sample_rate=16000,
@@ -43,7 +43,7 @@ class TestWakeWordSTT:
         assert detector.engine == "stt"
 
     def test_listen_stt_phrase_match(self, detector, mock_stt):
-        mock_stt.transcribe_once.return_value = "hey jarvis what time is it"
+        mock_stt.transcribe_once.return_value = "hey echo what time is it"
         stop_event = threading.Event()
         result = detector._listen_stt(stop_event)
         assert result is True
@@ -67,7 +67,7 @@ class TestWakeWordSTT:
         assert result is False
 
     def test_listen_until_detected_dispatches_to_stt(self, detector, mock_stt):
-        mock_stt.transcribe_once.return_value = "hey jarvis"
+        mock_stt.transcribe_once.return_value = "hey echo"
         stop_event = threading.Event()
         result = detector.listen_until_detected(stop_event)
         assert result is True
@@ -80,7 +80,7 @@ class TestWakeWordSTT:
             # then override engine and model to test the openwakeword path.
             detector = WakeWordDetector(
                 engine="stt",
-                phrase="hey jarvis",
+                phrase="hey echo",
                 stt=mock_stt,
                 listen_seconds=1.0,
                 sample_rate=16000,
@@ -115,7 +115,7 @@ class TestOpenWakeWordDeviceError:
 
             detector = WakeWordDetector(
                 engine="stt",
-                phrase="hey jarvis",
+                phrase="hey echo",
                 stt=mock_stt,
                 listen_seconds=1.0,
                 sample_rate=16000,
@@ -150,7 +150,7 @@ class TestIsTriggered:
 
             d = WakeWordDetector(
                 engine="stt",
-                phrase="hey jarvis",
+                phrase="hey echo",
                 stt=mock_stt,
                 listen_seconds=1.0,
                 sample_rate=16000,
@@ -168,21 +168,21 @@ class TestIsTriggered:
             return d
 
     def test_above_threshold(self, detector):
-        predictions = {"hey_jarvis": 0.8}
+        predictions = {"hey_echo": 0.8}
         assert detector._is_triggered(predictions) is True
 
     def test_below_threshold(self, detector):
-        predictions = {"hey_jarvis": 0.3}
+        predictions = {"hey_echo": 0.3}
         assert detector._is_triggered(predictions) is False
 
     def test_holdoff_window(self, detector):
-        predictions = {"hey_jarvis": 0.9}
+        predictions = {"hey_echo": 0.9}
         detector._is_triggered(predictions)  # triggers, sets _last_trigger
         # Immediately try again — should be blocked by holdoff
         assert detector._is_triggered(predictions) is False
 
     def test_holdoff_expires(self, detector):
-        predictions = {"hey_jarvis": 0.9}
+        predictions = {"hey_echo": 0.9}
         detector._is_triggered(predictions)
         detector._last_trigger = time.time() - 1.0  # expired
         assert detector._is_triggered(predictions) is True

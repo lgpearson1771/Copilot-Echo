@@ -14,8 +14,8 @@ class AppConfig:
 
 @dataclass
 class VoiceConfig:
-    wakeword_engine: str = "stt"
-    wake_word: str = "hey jarvis"
+    wakeword_engine: str = "openwakeword"
+    wake_word: str = "hey echo"
     audio_device: int | None = None
     audio_device_name: str | None = None
     sample_rate: int = 16000
@@ -26,9 +26,11 @@ class VoiceConfig:
     stt_energy_threshold: float = 0.01
     post_tts_cooldown_seconds: float = 0.5
     conversation_window_seconds: float = 30.0
-    wakeword_inference_framework: str = "tflite"
-    wakeword_models: list[str] = field(default_factory=list)
-    wakeword_threshold: float = 0.6
+    wakeword_inference_framework: str = "onnx"
+    wakeword_models: list[str] = field(
+        default_factory=lambda: ["models/hey_echo.onnx"]
+    )
+    wakeword_threshold: float = 0.5
     wakeword_chunk_size: int = 1280
     wakeword_holdoff_seconds: float = 1.0
     wakeword_vad_threshold: float = 0.0

@@ -29,7 +29,7 @@ def fake_config() -> Config:
         app=AppConfig(name="Test Echo", log_level="DEBUG"),
         voice=VoiceConfig(
             wakeword_engine="stt",
-            wake_word="hey jarvis",
+            wake_word="hey echo",
             sample_rate=16000,
             wake_listen_seconds=1.0,
             command_listen_seconds=2.0,

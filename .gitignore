@@ -8,3 +8,6 @@ config/projects/
 
 # Training artifacts (moved to openwakeword-trainer repo)
 training/
+
+# WSL venv symlink artifacts
+C*/
