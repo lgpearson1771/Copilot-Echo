@@ -100,7 +100,7 @@ class AutonomousRunner:
     def _run(
         self,
         prompt: str,
-        max_steps: int,
+        max_steps: int | None,
         max_minutes: int,
         status_callback: Callable[[str], None],
         stop_event: threading.Event,
@@ -145,13 +145,20 @@ class AutonomousRunner:
     def _autonomous_loop(
         self,
         current_prompt: str,
-        max_steps: int,
+        max_steps: int | None,
         deadline: float,
         status_callback: Callable[[str], None],
         stop_event: threading.Event,
     ) -> None:
         """Inner loop extracted from _run for clean exception handling."""
-        for step in range(1, max_steps + 1):
+        step = 0
+        while True:
+            step += 1
+            if max_steps is not None and step > max_steps:
+                logging.info("Autonomous mode: max steps reached")
+                self.tts.speak("I've completed the maximum number of steps.")
+                break
+
             if stop_event.is_set():
                 break
 
@@ -160,8 +167,12 @@ class AutonomousRunner:
                 self.tts.speak("I've hit the time limit. Here's where I got to.")
                 break
 
-            logging.info("Autonomous step %d/%d", step, max_steps)
-            status_callback(f"Working ({step}/{max_steps})")
+            if max_steps is not None:
+                logging.info("Autonomous step %d/%d", step, max_steps)
+                status_callback(f"Working ({step}/{max_steps})")
+            else:
+                logging.info("Autonomous step %d", step)
+                status_callback(f"Working (step {step})")
 
             # Pre-step interrupt check
             if self._check_hotkey_interrupt(f"before step {step}"):
@@ -214,10 +225,6 @@ class AutonomousRunner:
                 return
 
             current_prompt = "Continue with the next step. Report your progress."
-        else:
-            # max_steps reached without DONE
-            logging.info("Autonomous mode: max steps reached")
-            self.tts.speak("I've completed the maximum number of steps.")
 
         self.orchestrator.stop_autonomous()
         self._stop_interrupt_watcher()

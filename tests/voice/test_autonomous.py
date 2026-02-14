@@ -187,6 +187,28 @@ class TestRun:
 
         assert mock_orchestrator.agent.send.call_count == 3
 
+    def test_unlimited_steps_relies_on_done(self, runner, mock_orchestrator, mock_stt):
+        """When max_steps is None, loop continues until agent says DONE."""
+        call_count = 0
+
+        def agent_reply(prompt, timeout=120.0):
+            nonlocal call_count
+            call_count += 1
+            if call_count >= 7:
+                return "Finished everything\nDONE"
+            return "Still working\nNEXT"
+
+        mock_orchestrator.agent.send.side_effect = agent_reply
+        mock_stt.transcribe_once.return_value = ""
+        status_cb = MagicMock()
+        stop_event = threading.Event()
+
+        runner._run("test task", None, 10, status_cb, stop_event)
+
+        assert mock_orchestrator.agent.send.call_count == 7
+        # Status callback should show "step N" without a total
+        status_cb.assert_any_call("Working (step 1)")
+
     def test_stop_event_exits(self, runner, mock_orchestrator, mock_stt):
         mock_stt.transcribe_once.return_value = ""
         status_cb = MagicMock()
