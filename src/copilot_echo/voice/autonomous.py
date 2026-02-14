@@ -68,8 +68,9 @@ class AutonomousRunner:
                         else self.config.agent.autonomous_max_steps
                     )
                     self.tts.speak(f"Starting routine: {routine.name}.")
+                    prompt = routine.prompt.replace("{trigger}", original)
                     self._run(
-                        routine.prompt,
+                        prompt,
                         max_steps,
                         self.config.agent.autonomous_max_minutes,
                         status_callback,
@@ -124,10 +125,15 @@ class AutonomousRunner:
             "1. Work through the routine one step at a time.\n"
             "2. After each step give a concise spoken summary of what you "
             "did and what you found.\n"
-            "3. End your reply with the word NEXT if there are more steps, "
-            "or DONE if the routine is complete.\n"
-            "4. Do NOT include NEXT or DONE in the spoken summary — put it "
-            "on its own final line.\n"
+            "3. End your reply with one of these markers on its own final line:\n"
+            "   - NEXT if there are more steps and you can proceed without "
+            "user input.\n"
+            "   - WAIT if you need the user's spoken response before "
+            "continuing (e.g. confirming a choice, approving a comment, "
+            "answering a question).\n"
+            "   - DONE if the routine is complete.\n"
+            "4. Do NOT include NEXT, WAIT, or DONE in the spoken summary — "
+            "put the marker on its own final line only.\n"
         )
 
         deadline = time.time() + max_minutes * 60
@@ -200,8 +206,8 @@ class AutonomousRunner:
                 self.tts.speak("I didn't get a response. Stopping.")
                 break
 
-            # Strip the DONE / NEXT marker before speaking
-            spoken_text, is_done = self._strip_marker(reply)
+            # Strip the DONE / NEXT / WAIT marker before speaking
+            spoken_text, marker = self._strip_marker(reply)
             logging.info("Autonomous reply (step %d): %s", step, reply)
 
             self._speaking.set()
@@ -232,12 +238,40 @@ class AutonomousRunner:
                     current_prompt = "Continue with the next step. Report your progress."
                 continue
 
-            if is_done:
+            if marker == "done":
                 logging.info("Autonomous mode: agent signalled DONE at step %d", step)
                 self.tts.speak("All done with that routine.")
                 break
 
-            # Inter-step interrupt check
+            if marker == "wait":
+                logging.info("Autonomous mode: agent waiting for user input at step %d", step)
+                self.tts.speak("I'm listening.")
+                user_input = self.stt.transcribe_until_silence(
+                    silence_timeout=self.config.voice.conversation_window_seconds,
+                    utterance_end_seconds=self.config.voice.utterance_end_seconds,
+                    max_duration=self.config.voice.max_listen_seconds,
+                    energy_threshold=self.config.voice.stt_energy_threshold,
+                )
+                if user_input and self._is_interrupt_phrase(user_input):
+                    logging.info("Autonomous mode: exit phrase during WAIT at step %d", step)
+                    self._exit_autonomous(status_callback)
+                    return
+                if user_input:
+                    logging.info("Autonomous mode: user response during WAIT: %s", user_input)
+                    current_prompt = (
+                        f"The user said: {user_input}\n\n"
+                        "Take their response into account and continue. "
+                        "Report your progress."
+                    )
+                else:
+                    logging.info("Autonomous mode: silence during WAIT, continuing")
+                    current_prompt = (
+                        "The user didn't respond. Continue with the next step. "
+                        "Report your progress."
+                    )
+                continue
+
+            # marker == "next" — standard inter-step interrupt check
             if self._check_hotkey_interrupt("between steps"):
                 self._exit_autonomous(status_callback)
                 return
@@ -278,24 +312,25 @@ class AutonomousRunner:
         return any(p in normalized for p in INTERRUPT_PHRASES)
 
     @staticmethod
-    def _strip_marker(reply: str) -> tuple[str, bool]:
-        """Strip DONE / NEXT marker from the agent's reply.
+    def _strip_marker(reply: str) -> tuple[str, str]:
+        """Strip DONE / NEXT / WAIT marker from the agent's reply.
 
-        Returns ``(spoken_text, is_done)``.
+        Returns ``(spoken_text, marker)`` where *marker* is one of
+        ``"done"``, ``"wait"``, or ``"next"``.
         """
-        is_done = False
+        marker_found = "next"
         spoken_text = reply
-        for marker in ("DONE", "NEXT"):
+        for marker in ("DONE", "WAIT", "NEXT"):
             lines = spoken_text.rstrip().rsplit("\n", 1)
             if len(lines) > 1 and lines[-1].strip().upper() == marker:
                 spoken_text = lines[0].rstrip()
-                if marker == "DONE":
-                    is_done = True
+                marker_found = marker.lower()
+                break
             elif spoken_text.rstrip().upper().endswith(marker):
                 spoken_text = spoken_text.rstrip()[: -len(marker)].rstrip()
-                if marker == "DONE":
-                    is_done = True
-        return spoken_text, is_done
+                marker_found = marker.lower()
+                break
+        return spoken_text, marker_found
 
     def _interrupt_watcher(self) -> None:
         """Poll interrupt_event at high frequency and cancel the agent.

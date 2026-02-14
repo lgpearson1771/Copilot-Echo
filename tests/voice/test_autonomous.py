@@ -20,45 +20,57 @@ from copilot_echo.voice.tts import INTERRUPT_PHRASES
 
 class TestStripMarker:
     def test_done_on_last_line(self):
-        text, is_done = AutonomousRunner._strip_marker("Summary text\nDONE")
+        text, marker = AutonomousRunner._strip_marker("Summary text\nDONE")
         assert "DONE" not in text
-        assert is_done is True
+        assert marker == "done"
 
     def test_next_on_last_line(self):
-        text, is_done = AutonomousRunner._strip_marker("Step complete\nNEXT")
+        text, marker = AutonomousRunner._strip_marker("Step complete\nNEXT")
         assert "NEXT" not in text
-        assert is_done is False
+        assert marker == "next"
+
+    def test_wait_on_last_line(self):
+        text, marker = AutonomousRunner._strip_marker("Pick a comment\nWAIT")
+        assert "WAIT" not in text
+        assert marker == "wait"
 
     def test_inline_done(self):
-        text, is_done = AutonomousRunner._strip_marker("All finished DONE")
+        text, marker = AutonomousRunner._strip_marker("All finished DONE")
         assert "DONE" not in text
-        assert is_done is True
+        assert marker == "done"
 
     def test_inline_next(self):
-        text, is_done = AutonomousRunner._strip_marker("Moving on NEXT")
+        text, marker = AutonomousRunner._strip_marker("Moving on NEXT")
         assert "NEXT" not in text
-        assert is_done is False
+        assert marker == "next"
+
+    def test_inline_wait(self):
+        text, marker = AutonomousRunner._strip_marker("What do you think? WAIT")
+        assert "WAIT" not in text
+        assert marker == "wait"
 
     def test_no_marker(self):
         original = "Just a normal reply"
-        text, is_done = AutonomousRunner._strip_marker(original)
+        text, marker = AutonomousRunner._strip_marker(original)
         assert text == original
-        assert is_done is False
+        assert marker == "next"
 
     def test_done_mixed_case(self):
-        text, is_done = AutonomousRunner._strip_marker("Text\ndone")
-        # The method checks upper() so lowercase "done" should match
-        assert is_done is True
+        text, marker = AutonomousRunner._strip_marker("Text\ndone")
+        assert marker == "done"
 
     def test_next_mixed_case(self):
-        text, is_done = AutonomousRunner._strip_marker("Text\nnext")
-        assert is_done is False
+        text, marker = AutonomousRunner._strip_marker("Text\nnext")
+        assert marker == "next"
         assert "next" not in text.lower() or text.strip() == "Text"
 
-    def test_both_markers_done_wins(self):
-        text, is_done = AutonomousRunner._strip_marker("Step\nNEXT\nDONE")
-        # DONE on last line after stripping NEXT — DONE should be processed
-        assert is_done is True
+    def test_wait_mixed_case(self):
+        text, marker = AutonomousRunner._strip_marker("Text\nwait")
+        assert marker == "wait"
+
+    def test_done_takes_priority(self):
+        text, marker = AutonomousRunner._strip_marker("Step\nDONE")
+        assert marker == "done"
 
 
 class TestIsInterruptPhrase:
@@ -152,6 +164,34 @@ class TestCheckTrigger:
             "what time is it", "what time is it", status_cb, stop_event
         )
         assert result is False
+
+    def test_trigger_placeholder_substituted(self, fake_config, mock_orchestrator, mock_stt, mock_tts):
+        """The {trigger} placeholder in the routine prompt should be replaced with the original text."""
+        from copilot_echo.config import AutonomousRoutine
+
+        fake_config.agent.autonomous_routines = [
+            AutonomousRoutine(
+                name="Review PR by Person",
+                trigger_phrases=["review PR by"],
+                prompt="Find the PR by {trigger} and review it.",
+                max_steps=1,
+            ),
+        ]
+        speak_fn = MagicMock(return_value=False)
+        runner = AutonomousRunner(
+            fake_config, mock_orchestrator, mock_stt, mock_tts, speak_fn
+        )
+        mock_orchestrator.agent.send.return_value = "Done\nDONE"
+
+        result = runner.check_trigger(
+            "review pr by arjun", "review PR by Arjun", MagicMock(), threading.Event()
+        )
+        assert result is True
+
+        # Verify the prompt sent to the agent contains the actual name, not the placeholder
+        sent_prompt = mock_orchestrator.agent.send.call_args[0][0]
+        assert "review PR by Arjun" in sent_prompt
+        assert "{trigger}" not in sent_prompt
 
 
 # ------------------------------------------------------------------
@@ -281,6 +321,69 @@ class TestRun:
         # Should speak about time limit
         calls = [c.args[0] for c in mock_tts.speak.call_args_list]
         assert any("time limit" in c.lower() for c in calls)
+
+    def test_wait_marker_listens_for_user(self, runner, mock_orchestrator, mock_stt, mock_tts):
+        """WAIT marker should pause and listen, then feed user response to next step."""
+        call_count = 0
+
+        def agent_reply(prompt, keep_state=True):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                return "Here are my comments. What do you think?\nWAIT"
+            return "Got it, finishing up.\nDONE"
+
+        mock_orchestrator.agent.send.side_effect = agent_reply
+        mock_stt.transcribe_once.return_value = ""
+        mock_stt.transcribe_until_silence.return_value = "post both comments"
+        status_cb = MagicMock()
+        stop_event = threading.Event()
+
+        runner._run("test task", 5, 10, status_cb, stop_event)
+
+        assert call_count == 2
+        # The second prompt should contain the user's spoken response
+        second_prompt = mock_orchestrator.agent.send.call_args_list[1][0][0]
+        assert "post both comments" in second_prompt
+
+    def test_wait_marker_silence_continues(self, runner, mock_orchestrator, mock_stt, mock_tts):
+        """If user says nothing during WAIT, the loop should continue."""
+        call_count = 0
+
+        def agent_reply(prompt, keep_state=True):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                return "What do you want to do?\nWAIT"
+            return "OK, wrapping up.\nDONE"
+
+        mock_orchestrator.agent.send.side_effect = agent_reply
+        mock_stt.transcribe_once.return_value = ""
+        mock_stt.transcribe_until_silence.return_value = ""
+        status_cb = MagicMock()
+        stop_event = threading.Event()
+
+        runner._run("test task", 5, 10, status_cb, stop_event)
+
+        assert call_count == 2
+        # Second prompt should note user didn't respond
+        second_prompt = mock_orchestrator.agent.send.call_args_list[1][0][0]
+        assert "didn't respond" in second_prompt
+
+    def test_wait_marker_interrupt_phrase_exits(self, runner, mock_orchestrator, mock_stt, mock_tts):
+        """If user says an interrupt phrase during WAIT, autonomous mode should exit."""
+        mock_orchestrator.agent.send.return_value = "Thoughts?\nWAIT"
+        mock_stt.transcribe_once.return_value = ""
+        mock_stt.transcribe_until_silence.return_value = "stop"
+        status_cb = MagicMock()
+        stop_event = threading.Event()
+
+        runner._run("test task", 5, 10, status_cb, stop_event)
+
+        # Should only have called agent once then exited
+        assert mock_orchestrator.agent.send.call_count == 1
+        calls = [c.args[0] for c in mock_tts.speak.call_args_list]
+        assert any("stopping" in c.lower() or "autonomous" in c.lower() for c in calls)
 
 
 # ------------------------------------------------------------------
