@@ -284,6 +284,93 @@ class TestRun:
 
 
 # ------------------------------------------------------------------
+# Soft interrupt during autonomous TTS
+# ------------------------------------------------------------------
+
+class TestSoftInterrupt:
+    @pytest.fixture
+    def runner_with_interrupt(self, fake_config, mock_orchestrator, mock_stt, mock_tts):
+        """Runner whose speak_interruptible returns True on first call (interrupted),
+        then False on subsequent calls."""
+        call_count = 0
+
+        def speak_fn(text):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                return True  # First TTS is interrupted
+            return False
+
+        runner = AutonomousRunner(
+            fake_config, mock_orchestrator, mock_stt, mock_tts, speak_fn
+        )
+        runner._call_count_ref = lambda: call_count
+        return runner
+
+    def test_tts_interrupt_silence_continues(self, runner_with_interrupt, mock_orchestrator, mock_stt, mock_tts):
+        """When TTS is interrupted and user says nothing, routine continues."""
+        # Agent replies: first NEXT, second DONE
+        replies = iter(["Step one result\nNEXT", "Step two done\nDONE"])
+        mock_orchestrator.agent.send.side_effect = lambda *a, **kw: next(replies)
+        mock_stt.transcribe_once.return_value = ""  # pre/inter-step checks
+        mock_stt.transcribe_until_silence.return_value = ""  # silence after interrupt
+
+        status_cb = MagicMock()
+        stop_event = threading.Event()
+
+        runner_with_interrupt._run("test task", 5, 10, status_cb, stop_event)
+
+        # Agent should have been called twice (routine continued after interrupt)
+        assert mock_orchestrator.agent.send.call_count == 2
+        # Should NOT have spoken "stopping autonomous"
+        tts_calls = [c.args[0] for c in mock_tts.speak.call_args_list]
+        assert not any("stopping" in c.lower() for c in tts_calls)
+
+    def test_tts_interrupt_user_gives_direction(self, runner_with_interrupt, mock_orchestrator, mock_stt, mock_tts):
+        """When TTS is interrupted and user gives direction, it's fed to the next step."""
+        replies = iter(["Step one result\nNEXT", "Incorporated feedback\nDONE"])
+        mock_orchestrator.agent.send.side_effect = lambda *a, **kw: next(replies)
+        mock_stt.transcribe_once.return_value = ""
+        mock_stt.transcribe_until_silence.return_value = "focus on the second PR"
+
+        status_cb = MagicMock()
+        stop_event = threading.Event()
+
+        runner_with_interrupt._run("test task", 5, 10, status_cb, stop_event)
+
+        # Agent should have been called twice
+        assert mock_orchestrator.agent.send.call_count == 2
+        # The second prompt should contain the user's direction
+        second_call_prompt = mock_orchestrator.agent.send.call_args_list[1].args[0]
+        assert "focus on the second PR" in second_call_prompt
+        assert "user interrupted" in second_call_prompt.lower()
+
+    def test_tts_interrupt_stop_phrase_exits(self, fake_config, mock_orchestrator, mock_stt, mock_tts):
+        """When TTS is interrupted and user says 'stop', autonomous mode exits."""
+        speak_fn = MagicMock(return_value=True)  # Always interrupted
+        runner = AutonomousRunner(
+            fake_config, mock_orchestrator, mock_stt, mock_tts, speak_fn
+        )
+
+        mock_orchestrator.agent.send.return_value = "Step one result\nNEXT"
+        mock_stt.transcribe_once.return_value = ""
+        mock_stt.transcribe_until_silence.return_value = "stop"
+
+        status_cb = MagicMock()
+        stop_event = threading.Event()
+
+        runner._run("test task", 5, 10, status_cb, stop_event)
+
+        # Should have called agent only once then exited
+        assert mock_orchestrator.agent.send.call_count == 1
+        # Should have spoken about stopping autonomous mode
+        tts_calls = [c.args[0] for c in mock_tts.speak.call_args_list]
+        assert any("stopping" in c.lower() or "autonomous" in c.lower() for c in tts_calls)
+        # Status should end in Conversation (from _exit_autonomous)
+        status_cb.assert_any_call("Conversation")
+
+
+# ------------------------------------------------------------------
 # Interrupt watcher
 # ------------------------------------------------------------------
 
@@ -300,12 +387,44 @@ class TestInterruptWatcher:
         watcher = threading.Thread(target=runner._interrupt_watcher, daemon=True)
         watcher.start()
 
-        # Fire interrupt
+        # Fire interrupt (watcher should act since _speaking is not set)
         mock_orchestrator.interrupt_event.set()
-        watcher.join(timeout=2)
+        # Give the watcher time to pick it up
+        time.sleep(0.5)
 
         assert runner._agent_interrupted.is_set()
         mock_orchestrator.agent.cancel.assert_called()
+
+        # Watcher now loops instead of returning — stop it explicitly
+        runner._stop_interrupt_watcher()
+        watcher.join(timeout=2)
+        assert not watcher.is_alive()
+
+    def test_watcher_skips_when_speaking(self, fake_config, mock_orchestrator, mock_stt, mock_tts):
+        """Watcher should NOT consume interrupt_event while _speaking is set."""
+        speak_fn = MagicMock(return_value=False)
+        runner = AutonomousRunner(
+            fake_config, mock_orchestrator, mock_stt, mock_tts, speak_fn
+        )
+
+        runner._interrupt_watcher_stop.clear()
+        runner._agent_interrupted.clear()
+        runner._speaking.set()  # TTS is active
+
+        watcher = threading.Thread(target=runner._interrupt_watcher, daemon=True)
+        watcher.start()
+
+        mock_orchestrator.interrupt_event.set()
+        time.sleep(0.5)
+
+        # Watcher should NOT have consumed the event — _speaking is set
+        assert not runner._agent_interrupted.is_set()
+        mock_orchestrator.agent.cancel.assert_not_called()
+        # interrupt_event should still be set (not consumed by watcher)
+        assert mock_orchestrator.interrupt_event.is_set()
+
+        runner._stop_interrupt_watcher()
+        watcher.join(timeout=2)
 
     def test_stop_interrupt_watcher(self, fake_config, mock_orchestrator, mock_stt, mock_tts):
         speak_fn = MagicMock(return_value=False)

@@ -37,6 +37,7 @@ class AutonomousRunner:
         self._speak_interruptible = speak_interruptible
         self._interrupt_watcher_stop = threading.Event()
         self._agent_interrupted = threading.Event()
+        self._speaking = threading.Event()
 
     # ------------------------------------------------------------------
     # Trigger detection
@@ -203,11 +204,33 @@ class AutonomousRunner:
             spoken_text, is_done = self._strip_marker(reply)
             logging.info("Autonomous reply (step %d): %s", step, reply)
 
+            self._speaking.set()
             interrupted = self._speak_interruptible(spoken_text)
+            self._speaking.clear()
             if interrupted:
-                logging.info("Autonomous mode: user interrupted at step %d", step)
-                self._exit_autonomous(status_callback)
-                return
+                logging.info("Autonomous mode: user interrupted TTS at step %d — listening for direction", step)
+                user_input = self.stt.transcribe_until_silence(
+                    silence_timeout=self.config.voice.conversation_window_seconds,
+                    utterance_end_seconds=self.config.voice.utterance_end_seconds,
+                    max_duration=self.config.voice.max_listen_seconds,
+                    energy_threshold=self.config.voice.stt_energy_threshold,
+                )
+                if user_input and self._is_interrupt_phrase(user_input):
+                    logging.info("Autonomous mode: exit phrase after interrupt at step %d", step)
+                    self._exit_autonomous(status_callback)
+                    return
+                if user_input:
+                    logging.info("Autonomous mode: user direction after interrupt: %s", user_input)
+                    current_prompt = (
+                        "The user interrupted and said: "
+                        f"{user_input}\n\n"
+                        "Take this into account and continue with the next step. "
+                        "Report your progress."
+                    )
+                else:
+                    logging.info("Autonomous mode: silence after interrupt, continuing")
+                    current_prompt = "Continue with the next step. Report your progress."
+                continue
 
             if is_done:
                 logging.info("Autonomous mode: agent signalled DONE at step %d", step)
@@ -275,15 +298,25 @@ class AutonomousRunner:
         return spoken_text, is_done
 
     def _interrupt_watcher(self) -> None:
-        """Poll interrupt_event at high frequency and cancel the agent."""
+        """Poll interrupt_event at high frequency and cancel the agent.
+
+        Skips when ``_speaking`` is set so that
+        ``InterruptibleSpeaker.speak()`` can consume the event instead
+        (soft interrupt).  Only acts when the agent is processing.
+        """
         while not self._interrupt_watcher_stop.is_set():
-            if self.orchestrator.interrupt_event.is_set():
+            if (
+                self.orchestrator.interrupt_event.is_set()
+                and not self._speaking.is_set()
+            ):
                 logging.info("Interrupt watcher: firing agent cancel")
                 self._agent_interrupted.set()
                 self.orchestrator.cancel_agent()
-                return
+                # Keep looping — the autonomous loop may continue after
+                # handling the cancellation.
             self._interrupt_watcher_stop.wait(timeout=0.15)
 
     def _stop_interrupt_watcher(self) -> None:
         self._interrupt_watcher_stop.set()
         self._agent_interrupted.clear()
+        self._speaking.clear()

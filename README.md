@@ -57,7 +57,7 @@ Or use `run.bat` instead of `run.ps1`.
 | **"Morning standup"** (or configured trigger) | Starts a pre-configured autonomous routine |
 | **"Get to work on {task}"** | Starts an ad-hoc autonomous routine for the given task |
 | **"Stop" / interrupt phrases** (during routine) | Stops autonomous mode and returns to conversation |
-| **Triple-tap Caps Lock** | Instantly interrupts TTS or autonomous mode (even mid-agent-call) |
+| **Triple-tap Caps Lock** | During autonomous TTS: stops speech and listens for direction (say nothing to continue, give direction to guide the next step, or say "stop" to exit). During agent processing: cancels the request and exits autonomous mode |
 | **Tray → Stop** | Same as hotkey — interrupts current operation |
 
 ## Knowledge File
@@ -142,15 +142,16 @@ Say **"get to work on {task}"** for any one-off autonomous workflow:
 3. Between steps, the mic listens briefly — say **"stop"** or any interrupt phrase to halt and return to conversation mode.
 4. Safety limits prevent runaway loops: `autonomous_max_steps` (or `null` for unlimited) and `autonomous_max_minutes`.
 
-### Stopping a Routine
+### Stopping or Redirecting a Routine
 
-You have three ways to interrupt an autonomous routine:
+You have several ways to interact with a running autonomous routine:
 
-- **Voice** — say "stop", "let me interrupt", or "listen up" between sentences or steps
-- **Triple-tap Caps Lock** — works instantly, even while the agent is processing or TTS is speaking (cancels the in-flight agent request)
+- **Voice** — say "stop", "let me interrupt", or "listen up" between sentences or steps to exit
+- **Triple-tap Caps Lock during speech** — stops TTS playback and listens for your input. Say nothing to let the routine continue, give direction to guide the next step, or say "stop" to exit autonomous mode
+- **Triple-tap Caps Lock during agent processing** — cancels the in-flight agent request and exits autonomous mode
 - **Tray → Stop** — right-click the tray icon and click Stop
 
-After interrupting, you return to conversation mode and can keep chatting.
+After exiting, you return to conversation mode and can keep chatting.
 
 ## Configuration
 

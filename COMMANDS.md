@@ -41,7 +41,7 @@ Substitute `run.bat` for `run.ps1` if preferred.
 | **"List my projects"** | Reads out active and archived project names |
 | **"Morning standup"** (or any configured trigger phrase) | Starts a pre-configured autonomous routine |
 | **"Get to work on {task}"** | Starts an ad-hoc autonomous routine for the given task |
-| **Triple-tap Caps Lock** | Instantly interrupts TTS or autonomous mode (works during agent processing too) |
+| **Triple-tap Caps Lock** | During autonomous TTS: stops speech and listens for direction (soft interrupt — say nothing to continue, give direction to guide the next step, or say "stop" to exit). During agent processing: cancels the request and exits autonomous mode. In normal conversation: interrupts TTS playback. |
 | **Tray → Stop** | Same as hotkey — interrupts current operation |
 
 ## Configuration Files
