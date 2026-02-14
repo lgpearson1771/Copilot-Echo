@@ -122,8 +122,10 @@ agent:
         Prepare my morning standup summary. Check my active work items,
         review any PRs I'm assigned to, and summarize what I worked on
         yesterday.
-      max_steps: 5
+      max_steps: 5    # or null for unlimited (relies on time limit only)
 ```
+
+Routines can reference [global Copilot skills](https://docs.github.com/en/copilot/customizing-copilot/adding-custom-instructions) instead of inlining long prompts — just set the prompt to read the SKILL.md file.
 
 Say any trigger phrase (e.g. "morning standup") during conversation mode to start the routine.
 
@@ -138,7 +140,7 @@ Say **"get to work on {task}"** for any one-off autonomous workflow:
 1. The agent receives your routine/task as a structured prompt with instructions to work step by step.
 2. After each step, the agent speaks a concise summary and signals `NEXT` (more to do) or `DONE` (finished).
 3. Between steps, the mic listens briefly — say **"stop"** or any interrupt phrase to halt and return to conversation mode.
-4. Safety limits (`autonomous_max_steps`, `autonomous_max_minutes`) prevent runaway loops.
+4. Safety limits prevent runaway loops: `autonomous_max_steps` (or `null` for unlimited) and `autonomous_max_minutes`.
 
 ### Stopping a Routine
 
@@ -160,7 +162,7 @@ Edit `config/config.yaml`. Key settings:
 | `voice.wake_word` | `hey echo` | Wake phrase |
 | `voice.wakeword_inference_framework` | `onnx` | `onnx` or `tflite` |
 | `voice.wakeword_models` | `["models/hey_echo.onnx"]` | Model names or paths under `models/` |
-| `voice.wakeword_threshold` | `0.8` | Detection confidence threshold |
+| `voice.wakeword_threshold` | `0.5` | Detection confidence threshold |
 | `voice.conversation_window_seconds` | `5.0` | Silence timeout before exiting conversation mode |
 | `voice.utterance_end_seconds` | `1.5` | Silence after speech that ends an utterance |
 | `voice.stt_energy_threshold` | `0.01` | RMS energy level to detect speech |
@@ -262,9 +264,10 @@ voice/
 - [x] Personal knowledge file for persistent agent context
 - [x] Project knowledge base for long-running projects
 - [x] "Get to work" autonomous mode
-- [x] Comprehensive unit test suite (294 tests, 84% coverage)
+- [x] Comprehensive unit test suite (343 tests)
 - [x] Teams/Zoom auto-pause integration
-- [ ] Error handling & resilience hardening
+- [x] Error handling & resilience hardening
+- [ ] Teams auto-pause manual validation
 - [ ] Repo edit confirmation flow
 
 See [docs/MVP.md](docs/MVP.md) for the full MVP progress tracker with detailed subtasks.

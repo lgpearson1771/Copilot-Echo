@@ -23,7 +23,7 @@ voice:
 
   # Openwakeword settings (only used when wakeword_engine is "openwakeword")
   wakeword_inference_framework: "onnx"  # "onnx" or "tflite"
-  # Built-in models: "alexa", "hey mycroft", "hey jarvis", "hey rhasspy", etc.
+  # Built-in models: "alexa", "hey mycroft", "hey rhasspy", etc.
   # Or a path to a custom model: ["models/hey_echo.onnx"]
   # To train a custom wake word, see https://github.com/lgpearson1771/openwakeword-trainer
   wakeword_models: ["models/hey_echo.onnx"]
@@ -74,13 +74,15 @@ agent:
   #       work items, review any PRs I'm assigned to, and list what I worked
   #       on yesterday.  Summarize in a few bullet points suitable for a
   #       standup meeting.
-  #     max_steps: 5
+  #     max_steps: 5    # or null for unlimited (relies on time limit only)
+  #
+  # Routines can also reference global Copilot skills instead of inlining prompts:
   #   - name: "PR Review"
-  #     trigger_phrases: ["review my PRs", "check pull requests", "PR review"]
+  #     trigger_phrases: ["review PRs", "check pull requests"]
   #     prompt: >
-  #       List all open pull requests assigned to me.  For each one, summarize
-  #       the description, check the build status, and highlight any review
-  #       comments that need my attention.
+  #       Read the skill file at ~/.copilot/skills/reviewing-prs/SKILL.md
+  #       and follow its instructions.
+  #     max_steps: null
 
 repo:
   default_path: null

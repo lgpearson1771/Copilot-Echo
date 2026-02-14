@@ -108,7 +108,7 @@ What needs to be done before Copilot Echo is ready for a full launch.
 ### Testing & Polish — DONE
 
 > Comprehensive pytest-based unit test suite covering all modules.
-> 331 tests, 84% overall coverage. All hardware dependencies mocked
+> 343 tests. All hardware dependencies mocked
 > (audio, TTS, STT, Copilot SDK, pystray, pynput, openwakeword).
 > Test infrastructure: pytest + pytest-asyncio + pytest-cov.
 
